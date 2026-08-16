@@ -6,7 +6,6 @@ import {
   ArrowRightLeft,
   Calendar,
   ChevronDown,
-  Copy,
   Globe2,
   Info,
   Sparkles,
@@ -124,10 +123,6 @@ export default function EthiopianDateConverter() {
   );
   const [mounted, setMounted] = useState(false);
   const [isSwapping, setIsSwapping] = useState(false);
-  const [shareState, setShareState] = useState<"idle" | "copied" | "failed">(
-    "idle"
-  );
-  const shareTimerRef = useRef<number | null>(null);
   const swapTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -136,7 +131,6 @@ export default function EthiopianDateConverter() {
 
   useEffect(() => {
     return () => {
-      if (shareTimerRef.current) window.clearTimeout(shareTimerRef.current);
       if (swapTimerRef.current) window.clearTimeout(swapTimerRef.current);
     };
   }, []);
@@ -218,18 +212,6 @@ export default function EthiopianDateConverter() {
   const setTodayForCurrentMode = useCallback(() => {
     setInput(getTodayInputForMode(mode));
   }, [mode]);
-
-  const handleShare = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(window.location.href);
-      setShareState("copied");
-    } catch {
-      setShareState("failed");
-    }
-
-    if (shareTimerRef.current) window.clearTimeout(shareTimerRef.current);
-    shareTimerRef.current = window.setTimeout(() => setShareState("idle"), 2000);
-  }, []);
 
   const switchMode = useCallback(() => {
     setIsSwapping(true);
@@ -491,39 +473,18 @@ export default function EthiopianDateConverter() {
               </div>
             </div>
 
-            {/* Action Buttons */}
-            <div className="mt-4 grid flex-none grid-cols-1 gap-2 sm:mt-6 sm:grid-cols-3">
+            <div className="mt-4 flex-none sm:mt-6">
               <button
                 type="button"
                 onClick={setTodayForCurrentMode}
                 className={cn(
-                  "rounded-xl border px-4 py-3 text-xs font-bold uppercase tracking-[0.12em] transition-all duration-200 hover:shadow-md active:scale-[0.98]",
+                  "w-full rounded-xl border px-4 py-3 text-xs font-bold uppercase tracking-[0.12em] transition-all duration-200 hover:shadow-md active:scale-[0.98]",
                   isGregorianInput
                     ? "border-teal-200 bg-teal-50 text-teal-700 hover:bg-teal-100 dark:border-teal-800/50 dark:bg-teal-950/40 dark:text-teal-300 dark:hover:bg-teal-950/60"
                     : "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 dark:border-amber-800/50 dark:bg-amber-950/40 dark:text-amber-300 dark:hover:bg-amber-950/60"
                 )}
               >
                 Today
-              </button>
-              <button
-                type="button"
-                onClick={switchMode}
-                className="group/swap flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white/80 px-4 py-3 text-xs font-bold uppercase tracking-[0.12em] text-slate-600 transition-all duration-200 hover:shadow-md active:scale-[0.98] dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300"
-              >
-                <ArrowRightLeft className="h-3.5 w-3.5 transition-transform duration-300 group-hover/swap:rotate-180" />
-                Swap
-              </button>
-              <button
-                type="button"
-                onClick={handleShare}
-                className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white/90 px-4 py-3 text-xs font-bold uppercase tracking-[0.12em] text-slate-600 transition-all duration-200 hover:shadow-md active:scale-[0.98] dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300"
-              >
-                <Copy className="h-3.5 w-3.5" />
-                {shareState === "idle"
-                  ? "Share"
-                  : shareState === "copied"
-                    ? "Copied"
-                    : "Failed"}
               </button>
             </div>
           </div>
