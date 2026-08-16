@@ -1,15 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  Bell,
-  BellRing,
-  CalendarClock,
-  CalendarSync,
-  Download,
-  Repeat,
-  Trash2,
-} from "lucide-react";
+import { Download, Trash2 } from "lucide-react";
 import Kenat from "kenat";
 
 import { DateInputFields } from "@/components/shared/date-input-fields";
@@ -29,13 +21,18 @@ import {
   type PlannerCalendar,
   type PlannerDateInput,
   type PlannerEvent,
-  type PlannerOccurrence,
   type RecurrenceRule,
 } from "@/lib/planner";
 import { cn } from "@/lib/utils";
 
 const EVENTS_STORAGE_KEY = "ethiotime-planner-events";
 const NOTIFIED_STORAGE_KEY = "ethiotime-planner-notified";
+
+const fieldClass =
+  "h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition-colors focus:border-teal-600 focus:ring-2 focus:ring-teal-600/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100";
+
+const labelClass =
+  "mb-1.5 block text-xs font-semibold text-slate-600 dark:text-slate-400";
 
 const reminderOptions = [0, 10, 30, 60, 180, 1440];
 
@@ -81,7 +78,7 @@ const loadEvents = (): PlannerEvent[] =>
 const loadNotified = (): Set<string> =>
   new Set(readJson<string[]>(NOTIFIED_STORAGE_KEY, [], isStringArray));
 
-function EventCard({
+function EventRow({
   event,
   onDelete,
 }: {
@@ -100,39 +97,35 @@ function EventCard({
   const ethDate = new Kenat(nextOccurrence.start).getEthiopian();
 
   return (
-    <article className="rounded-2xl border border-slate-200/70 bg-white/80 p-4 dark:border-slate-700/70 dark:bg-slate-900/65">
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <h3 className="text-sm font-bold text-slate-900 dark:text-white">{event.title}</h3>
-          <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-            {formatGregorian(nextOccurrence.start)}
+    <li className="flex items-start gap-4 border-b border-slate-100 py-4 last:border-b-0 dark:border-slate-800">
+      <div className="min-w-0 flex-1">
+        <p className="font-semibold text-slate-900 dark:text-white">{event.title}</p>
+        <p className="mt-0.5 text-sm text-slate-600 dark:text-slate-400">
+          {formatGregorian(nextOccurrence.start)}
+        </p>
+        <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
+          {ethDate.day}/{ethDate.month}/{ethDate.year} Ethiopian
+        </p>
+        <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
+          {formatReminder(event.reminderMinutes)}
+          {event.recurrence !== "none" && ` · repeats ${event.recurrence}`}
+        </p>
+        {event.notes && (
+          <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+            {event.notes}
           </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => onDelete(event.id)}
-          className="rounded-lg border border-rose-200 bg-rose-50 p-2 text-rose-700 transition-colors hover:bg-rose-100 dark:border-rose-900/50 dark:bg-rose-950/30 dark:text-rose-300"
-          aria-label="Delete event"
-        >
-          <Trash2 className="h-4 w-4" />
-        </button>
+        )}
       </div>
 
-      <div className="mt-3 grid gap-2 text-xs">
-        <p className="rounded-lg border border-teal-100 bg-teal-50/80 px-2.5 py-2 text-teal-800 dark:border-teal-900/50 dark:bg-teal-950/25 dark:text-teal-200">
-          Ethiopian: {ethDate.day}/{ethDate.month}/{ethDate.year}
-        </p>
-        <p className="rounded-lg border border-slate-200/80 bg-slate-50/80 px-2.5 py-2 text-slate-600 dark:border-slate-700/60 dark:bg-slate-900/70 dark:text-slate-300">
-          Reminder: {formatReminder(event.reminderMinutes)} · {event.recurrence}
-        </p>
-      </div>
-
-      {event.notes && (
-        <p className="mt-3 text-xs leading-relaxed text-slate-600 dark:text-slate-300">
-          {event.notes}
-        </p>
-      )}
-    </article>
+      <button
+        type="button"
+        onClick={() => onDelete(event.id)}
+        className="shrink-0 rounded-lg p-2 text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/40 dark:hover:text-rose-400"
+      >
+        <Trash2 className="h-4 w-4" aria-hidden="true" />
+        <span className="sr-only">Delete {event.title}</span>
+      </button>
+    </li>
   );
 }
 
@@ -168,17 +161,6 @@ export default function EventPlanner() {
     if (!mounted) return;
     writeJson(EVENTS_STORAGE_KEY, events);
   }, [events, mounted]);
-
-  const upcomingOccurrences = useMemo(() => {
-    const from = new Date();
-    const all = events.flatMap((event) =>
-      getUpcomingOccurrences(event, from, event.recurrence === "none" ? 1 : 8)
-    );
-
-    return all
-      .sort((a, b) => a.start.getTime() - b.start.getTime())
-      .slice(0, 18);
-  }, [events]);
 
   const upcomingHolidays = useMemo(
     () => getUpcomingHolidayOccurrences(new Date(), 6),
@@ -344,319 +326,286 @@ export default function EventPlanner() {
     downloadIcsContent("ethiotime-events.ics", content);
   };
 
+
   if (!mounted) {
-    return null;
+    return (
+      <section className="mx-auto w-full max-w-3xl px-1 py-2">
+        <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
+          Event Planner
+        </h1>
+        <p className="mt-2 text-slate-600 dark:text-slate-400">
+          Plan events in either calendar and get a reminder before they start.
+        </p>
+        <div
+          className="mt-8 h-64 animate-pulse rounded-2xl bg-slate-100 dark:bg-slate-800"
+          aria-hidden="true"
+        />
+      </section>
+    );
   }
 
+  const notificationsOn = permission === "granted";
+
   return (
-    <section className="animate-rise space-y-4 pb-8">
-      <header className="glass-surface rounded-[1.8rem] p-5 sm:p-7">
-        <div className="inline-flex items-center gap-1.5 rounded-full border border-teal-200 bg-teal-50 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-teal-700 dark:border-teal-800/50 dark:bg-teal-950/30 dark:text-teal-200">
-          <CalendarClock className="h-3.5 w-3.5" />
-          Planner + Reminders
-        </div>
-        <h1 className="mt-3 text-3xl font-black tracking-tight text-slate-900 sm:text-4xl dark:text-white">
-          Dual-calendar Event Planner
+    <section className="mx-auto w-full max-w-3xl px-1 py-2">
+      <header className="mb-8">
+        <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
+          Event Planner
         </h1>
-        <p className="mt-2 max-w-2xl text-sm text-slate-600 dark:text-slate-300">
-          Create events in Gregorian or Ethiopian calendar, auto-convert instantly,
-          add recurrence, and get reminder notifications.
+        <p className="mt-2 text-slate-600 dark:text-slate-400">
+          Plan events in either calendar and get a reminder before they start.
         </p>
       </header>
 
-      <div className="grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
-        <div className="glass-surface rounded-[1.6rem] p-5 sm:p-6">
-          <div className="grid gap-3 sm:grid-cols-2">
-            {calendarOptions.map((item) => (
-              <button
-                key={item.value}
-                type="button"
-                onClick={() =>
-                  setDate((previous) => {
-                    if (previous.calendar === item.value) return previous;
-                    return convertPlannerDate(previous, item.value);
-                  })
-                }
-                className={cn(
-                  "rounded-xl border px-4 py-3 text-sm font-bold transition-all",
-                  date.calendar === item.value
-                    ? "border-teal-300 bg-white text-teal-700 shadow-sm dark:border-teal-700 dark:bg-slate-900 dark:text-teal-200"
-                    : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300"
-                )}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="mt-4 space-y-3">
-            <div>
-              <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
-                Title
-              </label>
-              <input
-                value={title}
-                onChange={(event) => setTitle(event.target.value)}
-                className="h-11 w-full rounded-xl border border-slate-200/80 bg-white/85 px-3.5 text-sm font-medium outline-none transition-all focus:border-teal-400 focus:ring-2 focus:ring-teal-500/15 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-100"
-                placeholder="Meeting, fasting day, birthday..."
-              />
-            </div>
-
-            <DateInputFields
-              calendar={date.calendar}
-              day={date.day}
-              month={date.month}
-              year={date.year}
-              onChange={(patch) =>
-                setDate((previous) => ({
-                  ...previous,
-                  ...patch,
-                }))
+      {/* Add an event */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+        <div className="mb-5 inline-flex rounded-lg border border-slate-200 p-1 dark:border-slate-700">
+          {calendarOptions.map((item) => (
+            <button
+              key={item.value}
+              type="button"
+              onClick={() =>
+                setDate((previous) =>
+                  previous.calendar === item.value
+                    ? previous
+                    : convertPlannerDate(previous, item.value)
+                )
               }
+              aria-pressed={date.calendar === item.value}
+              className={cn(
+                "rounded-md px-4 py-2 text-sm font-semibold transition-colors",
+                date.calendar === item.value
+                  ? "bg-teal-600 text-white"
+                  : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
+              )}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+
+        <label className={labelClass} htmlFor="event-title">
+          Title
+        </label>
+        <input
+          id="event-title"
+          value={title}
+          onChange={(event) => setTitle(event.target.value)}
+          className={fieldClass}
+          placeholder="Meeting, fasting day, birthday…"
+        />
+
+        <div className="mt-4">
+          <DateInputFields
+            calendar={date.calendar}
+            day={date.day}
+            month={date.month}
+            year={date.year}
+            onChange={(patch) =>
+              setDate((previous) => ({ ...previous, ...patch }))
+            }
+          />
+        </div>
+
+        {convertedPreview && (
+          <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+            Same day in the other calendar: {convertedPreview.day}/
+            {convertedPreview.month}/{convertedPreview.year}{" "}
+            {convertedPreview.calendar}
+          </p>
+        )}
+
+        <div className="mt-4 grid gap-4 sm:grid-cols-3">
+          <div>
+            <label className={labelClass} htmlFor="event-time">
+              Time
+            </label>
+            <input
+              id="event-time"
+              type="time"
+              value={date.time}
+              onChange={(event) =>
+                setDate((previous) => ({ ...previous, time: event.target.value }))
+              }
+              className={fieldClass}
             />
-
-            <div className="grid gap-3 sm:grid-cols-3">
-              <div>
-                <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
-                  Time
-                </label>
-                <input
-                  type="time"
-                  value={date.time}
-                  onChange={(event) =>
-                    setDate((previous) => ({ ...previous, time: event.target.value }))
-                  }
-                  className="h-11 w-full rounded-xl border border-slate-200/80 bg-white/85 px-3 text-sm font-semibold outline-none transition-all focus:border-teal-400 focus:ring-2 focus:ring-teal-500/15 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-100"
-                />
-              </div>
-              <div>
-                <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
-                  Recurrence
-                </label>
-                <select
-                  value={recurrence}
-                  onChange={(event) =>
-                    setRecurrence(event.target.value as RecurrenceRule)
-                  }
-                  className="h-11 w-full rounded-xl border border-slate-200/80 bg-white/85 px-3 text-sm font-semibold outline-none transition-all focus:border-teal-400 focus:ring-2 focus:ring-teal-500/15 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-100"
-                >
-                  {recurrenceOptions.map((item) => (
-                    <option key={item.value} value={item.value}>
-                      {item.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
-                  Reminder
-                </label>
-                <select
-                  value={reminderMinutes}
-                  onChange={(event) =>
-                    setReminderMinutes(Number.parseInt(event.target.value, 10))
-                  }
-                  className="h-11 w-full rounded-xl border border-slate-200/80 bg-white/85 px-3 text-sm font-semibold outline-none transition-all focus:border-teal-400 focus:ring-2 focus:ring-teal-500/15 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-100"
-                >
-                  {reminderOptions.map((minutes) => (
-                    <option key={minutes} value={minutes}>
-                      {formatReminder(minutes)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            {convertedPreview && (
-              <div className="rounded-xl border border-amber-200/80 bg-amber-50/75 px-3.5 py-3 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/25 dark:text-amber-200">
-                <div className="mb-1.5 flex items-center gap-1.5 font-bold uppercase tracking-[0.12em]">
-                  <CalendarSync className="h-3.5 w-3.5" />
-                  Auto-converted
-                </div>
-                {convertedPreview.day}/{convertedPreview.month}/{convertedPreview.year} ({convertedPreview.calendar})
-              </div>
-            )}
-
-            <div>
-              <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
-                Notes
-              </label>
-              <textarea
-                value={notes}
-                onChange={(event) => setNotes(event.target.value)}
-                className="min-h-24 w-full rounded-xl border border-slate-200/80 bg-white/85 px-3.5 py-2.5 text-sm font-medium outline-none transition-all focus:border-teal-400 focus:ring-2 focus:ring-teal-500/15 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-100"
-                placeholder="Optional details"
-              />
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={addEvent}
-                className="rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-teal-700"
-              >
-                Save Event
-              </button>
-              <button
-                type="button"
-                onClick={exportToIcs}
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200"
-              >
-                <Download className="h-4 w-4" />
-                Export .ics
-              </button>
-            </div>
+          </div>
+          <div>
+            <label className={labelClass} htmlFor="event-repeat">
+              Repeat
+            </label>
+            <select
+              id="event-repeat"
+              value={recurrence}
+              onChange={(event) =>
+                setRecurrence(event.target.value as RecurrenceRule)
+              }
+              className={fieldClass}
+            >
+              {recurrenceOptions.map((item) => (
+                <option key={item.value} value={item.value}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className={labelClass} htmlFor="event-reminder">
+              Remind me
+            </label>
+            <select
+              id="event-reminder"
+              value={reminderMinutes}
+              onChange={(event) =>
+                setReminderMinutes(Number.parseInt(event.target.value, 10))
+              }
+              className={fieldClass}
+            >
+              {reminderOptions.map((minutes) => (
+                <option key={minutes} value={minutes}>
+                  {formatReminder(minutes)}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 
-        <div className="space-y-4">
-          <div className="glass-surface rounded-[1.6rem] p-5 sm:p-6">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h2 className="text-lg font-black text-slate-900 dark:text-white">
-                  Reminder Center
-                </h2>
-                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                  Browser notification status: {permission}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={requestPermission}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-teal-200 bg-teal-50 px-3 py-2 text-xs font-bold text-teal-700 transition-colors hover:bg-teal-100 dark:border-teal-900/50 dark:bg-teal-950/20 dark:text-teal-200"
-              >
-                <BellRing className="h-3.5 w-3.5" />
-                Enable
-              </button>
-            </div>
+        <div className="mt-4">
+          <label className={labelClass} htmlFor="event-notes">
+            Notes <span className="font-normal text-slate-400">(optional)</span>
+          </label>
+          <textarea
+            id="event-notes"
+            value={notes}
+            onChange={(event) => setNotes(event.target.value)}
+            className={cn(fieldClass, "h-auto min-h-20 py-2.5")}
+            placeholder="Anything worth remembering"
+          />
+        </div>
 
-            <div className="mt-4 rounded-xl border border-slate-200/70 bg-white/70 p-3 dark:border-slate-700/60 dark:bg-slate-900/60">
-              <div className="mb-2 flex items-center justify-between gap-3">
-                <p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
-                  Holiday reminders
-                </p>
-                <label className="inline-flex items-center gap-2 text-xs font-semibold text-slate-600 dark:text-slate-300">
-                  <input
-                    type="checkbox"
-                    checked={holidayReminderEnabled}
-                    onChange={(event) => setHolidayReminderEnabled(event.target.checked)}
-                  />
-                  Enabled
-                </label>
-              </div>
-
-              <select
-                value={holidayReminderMinutes}
-                onChange={(event) =>
-                  setHolidayReminderMinutes(Number.parseInt(event.target.value, 10))
-                }
-                className="h-10 w-full rounded-lg border border-slate-200/80 bg-white/90 px-2.5 text-xs font-semibold outline-none transition-all focus:border-teal-400 focus:ring-2 focus:ring-teal-500/15 dark:border-slate-700 dark:bg-slate-900"
-              >
-                {reminderOptions.map((minutes) => (
-                  <option key={minutes} value={minutes}>
-                    {formatReminder(minutes)}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="mt-4 space-y-2">
-              {upcomingHolidays.map((item: HolidayOccurrence) => (
-                <div
-                  key={`${item.holiday.id}-${item.gregorianDate.toISOString()}`}
-                  className="rounded-xl border border-slate-200/70 bg-slate-50/80 px-3 py-2 text-xs dark:border-slate-700/60 dark:bg-slate-900/60"
-                >
-                  <p className="font-bold text-slate-800 dark:text-slate-100">
-                    {item.holiday.name} · {item.holiday.amharic}
-                  </p>
-                  <p className="mt-0.5 text-slate-500 dark:text-slate-400">
-                    {item.gregorianDate.toLocaleDateString()} · {item.ethiopian.day}/{item.ethiopian.month}/{item.ethiopian.year}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="glass-surface rounded-[1.6rem] p-5 sm:p-6">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-lg font-black text-slate-900 dark:text-white">Live alerts</h2>
-              <Bell className="h-4 w-4 text-teal-500" />
-            </div>
-            <div className="max-h-48 space-y-2 overflow-y-auto pr-1">
-              {alerts.length === 0 ? (
-                <p className="rounded-xl border border-dashed border-slate-200 bg-white/70 px-3 py-2 text-xs text-slate-500 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-400">
-                  Reminder activity appears here while the app is open.
-                </p>
-              ) : (
-                alerts.map((entry, index) => (
-                  <p
-                    key={`${entry}-${index}`}
-                    className="rounded-xl border border-teal-100 bg-teal-50/80 px-3 py-2 text-xs font-medium text-teal-800 dark:border-teal-900/50 dark:bg-teal-950/25 dark:text-teal-200"
-                  >
-                    {entry}
-                  </p>
-                ))
-              )}
-            </div>
-          </div>
+        <div className="mt-5 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={addEvent}
+            disabled={!title.trim()}
+            className="rounded-lg bg-teal-600 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Add event
+          </button>
+          <button
+            type="button"
+            onClick={exportToIcs}
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+          >
+            <Download className="h-4 w-4" aria-hidden="true" />
+            Export .ics
+          </button>
         </div>
       </div>
 
-      <div className="glass-surface rounded-[1.6rem] p-5 sm:p-6">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <h2 className="text-xl font-black text-slate-900 dark:text-white">
-            Upcoming occurrences
-          </h2>
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-400">
-            <Repeat className="h-3 w-3" />
-            recurring engine active
-          </span>
+      {/* Reminder settings */}
+      <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="font-semibold text-slate-900 dark:text-white">
+              Reminders
+            </h2>
+            <p className="mt-0.5 text-sm text-slate-600 dark:text-slate-400">
+              {notificationsOn
+                ? "Browser notifications are on."
+                : "Notifications are off, so reminders only show while this page is open."}
+            </p>
+          </div>
+          {!notificationsOn && (
+            <button
+              type="button"
+              onClick={requestPermission}
+              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+            >
+              Turn on
+            </button>
+          )}
         </div>
+
+        <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-slate-100 pt-4 dark:border-slate-800">
+          <label className="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+            <input
+              type="checkbox"
+              checked={holidayReminderEnabled}
+              onChange={(event) => setHolidayReminderEnabled(event.target.checked)}
+              className="h-4 w-4 rounded border-slate-300 accent-teal-600"
+            />
+            Also remind me about public holidays
+          </label>
+          {holidayReminderEnabled && (
+            <select
+              value={holidayReminderMinutes}
+              onChange={(event) =>
+                setHolidayReminderMinutes(Number.parseInt(event.target.value, 10))
+              }
+              className="h-9 rounded-lg border border-slate-300 bg-white px-2 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+              aria-label="Holiday reminder timing"
+            >
+              {reminderOptions.map((minutes) => (
+                <option key={minutes} value={minutes}>
+                  {formatReminder(minutes)}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+
+        {alerts.length > 0 && (
+          <ul className="mt-4 space-y-1.5 border-t border-slate-100 pt-4 text-sm text-slate-600 dark:border-slate-800 dark:text-slate-300">
+            {alerts.slice(0, 3).map((entry, index) => (
+              <li key={`${entry}-${index}`}>{entry}</li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {/* Events */}
+      <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+        <h2 className="font-semibold text-slate-900 dark:text-white">
+          Your events
+        </h2>
 
         {events.length === 0 ? (
-          <p className="rounded-2xl border border-dashed border-slate-200 bg-white/70 p-4 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-900/55 dark:text-slate-400">
-            Add your first event to enable reminders, recurrence, and ICS export.
+          <p className="mt-4 rounded-xl border border-dashed border-slate-300 px-5 py-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
+            No events yet. Add one above.
           </p>
         ) : (
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <ul className="mt-2">
             {events.map((event) => (
-              <EventCard key={event.id} event={event} onDelete={removeEvent} />
+              <EventRow key={event.id} event={event} onDelete={removeEvent} />
             ))}
-          </div>
-        )}
-
-        {upcomingOccurrences.length > 0 && (
-          <div className="mt-5 overflow-hidden rounded-2xl border border-slate-200/80 dark:border-slate-700/70">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-100/80 dark:bg-slate-800/70">
-                <tr>
-                  <th className="px-3 py-2 font-bold uppercase tracking-[0.1em] text-slate-500 dark:text-slate-300">Event</th>
-                  <th className="px-3 py-2 font-bold uppercase tracking-[0.1em] text-slate-500 dark:text-slate-300">Gregorian</th>
-                  <th className="px-3 py-2 font-bold uppercase tracking-[0.1em] text-slate-500 dark:text-slate-300">Ethiopian</th>
-                </tr>
-              </thead>
-              <tbody>
-                {upcomingOccurrences.slice(0, 12).map((entry: PlannerOccurrence) => (
-                  <tr
-                    key={entry.occurrenceKey}
-                    className="border-t border-slate-200/70 dark:border-slate-700/60"
-                  >
-                    <td className="px-3 py-2.5 font-semibold text-slate-800 dark:text-slate-100">
-                      {entry.title}
-                    </td>
-                    <td className="px-3 py-2.5 text-slate-600 dark:text-slate-300">
-                      {formatGregorian(entry.start)}
-                    </td>
-                    <td className="px-3 py-2.5 text-slate-600 dark:text-slate-300">
-                      {entry.ethiopian.day}/{entry.ethiopian.month}/{entry.ethiopian.year}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          </ul>
         )}
       </div>
+
+      {/* Next holidays */}
+      {holidayReminderEnabled && upcomingHolidays.length > 0 && (
+        <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+          <h2 className="font-semibold text-slate-900 dark:text-white">
+            Next holidays
+          </h2>
+          <ul className="mt-3 space-y-2 text-sm">
+            {upcomingHolidays.slice(0, 4).map((item: HolidayOccurrence) => (
+              <li
+                key={`${item.holiday.id}-${item.gregorianDate.toISOString()}`}
+                className="flex justify-between gap-4"
+              >
+                <span className="text-slate-700 dark:text-slate-300">
+                  {item.holiday.name}
+                </span>
+                <span className="shrink-0 text-slate-500 dark:text-slate-400">
+                  {item.gregorianDate.toLocaleDateString()}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </section>
   );
 }

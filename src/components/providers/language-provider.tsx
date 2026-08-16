@@ -30,7 +30,9 @@ const STORAGE_KEY = "ethiotime-language";
 const LanguageContext = createContext<LanguageContextValue | null>(null);
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
-  const [language, setLanguageState] = useState<Language>("am");
+  // English is the default; a stored preference is applied after mount. This must
+  // match the `lang` attribute the server renders on <html>.
+  const [language, setLanguageState] = useState<Language>("en");
 
   const restoredRef = useRef(false);
 

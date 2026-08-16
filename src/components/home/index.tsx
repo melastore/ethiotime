@@ -5,55 +5,8 @@ import { ArrowUpRight } from "lucide-react";
 
 import { TodayHero } from "@/components/home/today-hero";
 import { useLanguage } from "@/components/providers/language-provider";
-import type { TranslationKey } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { TOOL_DEFINITIONS } from "@/lib/tool-registry";
-
-/**
- * Translation keys for each tool, kept next to the registry order rather than as a
- * chain of `if` statements so adding a tool is a one-line change.
- */
-const TOOL_COPY: Record<
-  string,
-  { title: TranslationKey; description: TranslationKey }
-> = {
-  "/date-converter": {
-    title: "nav.dateConverter",
-    description: "nav.gregorianToEthiopian",
-  },
-  "/age-calculator": {
-    title: "nav.ageCalculator",
-    description: "nav.liveAgeTimeline",
-  },
-  "/ethiopian-calendar": {
-    title: "nav.ethiopianCalendar",
-    description: "nav.holidaysAndMonthView",
-  },
-  "/amharic-keyboard": {
-    title: "nav.amharicKeyboard",
-    description: "nav.typeInFidel",
-  },
-  "/note-taking": {
-    title: "nav.noteTaking",
-    description: "nav.fastPersonalNotes",
-  },
-  "/event-planner": {
-    title: "nav.eventPlanner",
-    description: "nav.planAndReminders",
-  },
-  "/date-difference": {
-    title: "nav.dateDifference",
-    description: "nav.daysAndWeeks",
-  },
-  "/holidays": {
-    title: "nav.holidays",
-    description: "nav.historyAndDates",
-  },
-  "/ethiopian-now": {
-    title: "nav.ethiopianNow",
-    description: "nav.worldClock",
-  },
-};
 
 export default function HomeLanding() {
   const { t } = useLanguage();
@@ -85,7 +38,6 @@ export default function HomeLanding() {
         <ul className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {TOOL_DEFINITIONS.map((tool, index) => {
             const Icon = tool.icon;
-            const copy = TOOL_COPY[tool.href];
 
             return (
               <li key={tool.href}>
@@ -120,7 +72,7 @@ export default function HomeLanding() {
 
                   <span className="mt-4 flex items-start justify-between gap-2">
                     <span className="text-lg font-bold text-slate-900 dark:text-white">
-                      {copy ? t(copy.title, tool.title) : tool.title}
+                      {t(tool.titleKey, tool.title)}
                     </span>
                     <ArrowUpRight
                       className="mt-1 h-4 w-4 shrink-0 text-slate-300 transition-all duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-teal-600 dark:text-slate-600 dark:group-hover:text-teal-400"
@@ -129,9 +81,7 @@ export default function HomeLanding() {
                   </span>
 
                   <span className="mt-1.5 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
-                    {copy
-                      ? t(copy.description, tool.description)
-                      : tool.description}
+                    {t(tool.descriptionKey, tool.description)}
                   </span>
                 </Link>
               </li>

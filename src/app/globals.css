@@ -174,4 +174,53 @@
   .animate-rise {
     animation: rise 620ms cubic-bezier(0.19, 1, 0.22, 1) both;
   }
+
+  /*
+   * Slim, unobtrusive scrollbar for panels inside rounded surfaces, where the
+   * platform scrollbar is both heavy and visually cut off by the corner radius.
+   * The track stays transparent and the thumb only surfaces on hover.
+   */
+  .scrollbar-slim {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+  }
+
+  .scrollbar-slim:hover,
+  .scrollbar-slim:focus-within {
+    scrollbar-color: rgba(100, 116, 139, 0.4) transparent;
+  }
+
+  .scrollbar-slim::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .scrollbar-slim::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-slim::-webkit-scrollbar-thumb {
+    background-color: transparent;
+    border-radius: 9999px;
+    transition: background-color 200ms ease;
+  }
+
+  .scrollbar-slim:hover::-webkit-scrollbar-thumb,
+  .scrollbar-slim:focus-within::-webkit-scrollbar-thumb {
+    background-color: rgba(100, 116, 139, 0.4);
+  }
+
+  .scrollbar-slim::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(100, 116, 139, 0.65);
+  }
+
+  .dark .scrollbar-slim:hover,
+  .dark .scrollbar-slim:focus-within {
+    scrollbar-color: rgba(148, 163, 184, 0.45) transparent;
+  }
+
+  .dark .scrollbar-slim:hover::-webkit-scrollbar-thumb,
+  .dark .scrollbar-slim:focus-within::-webkit-scrollbar-thumb {
+    background-color: rgba(148, 163, 184, 0.45);
+  }
 }

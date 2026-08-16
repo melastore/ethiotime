@@ -35,54 +35,14 @@ const navItems: NavItem[] = [
     descriptionKey: "nav.overview",
     defaultDescription: "Overview",
   },
-  ...TOOL_DEFINITIONS.map((tool) => {
-    const keyBase =
-      tool.href === "/date-converter"
-        ? "dateConverter"
-        : tool.href === "/age-calculator"
-          ? "ageCalculator"
-          : tool.href === "/ethiopian-calendar"
-            ? "ethiopianCalendar"
-            : tool.href === "/amharic-keyboard"
-              ? "amharicKeyboard"
-              : tool.href === "/note-taking"
-                ? "noteTaking"
-                : tool.href === "/event-planner"
-                  ? "eventPlanner"
-                  : tool.href === "/date-difference"
-                    ? "dateDifference"
-                    : tool.href === "/holidays"
-                      ? "holidays"
-                      : "ethiopianNow";
-
-    const descriptionKey =
-      tool.href === "/date-converter"
-        ? "nav.gregorianToEthiopian"
-        : tool.href === "/age-calculator"
-          ? "nav.liveAgeTimeline"
-          : tool.href === "/ethiopian-calendar"
-            ? "nav.holidaysAndMonthView"
-            : tool.href === "/amharic-keyboard"
-              ? "nav.typeInFidel"
-              : tool.href === "/note-taking"
-                ? "nav.fastPersonalNotes"
-                : tool.href === "/event-planner"
-                  ? "nav.planAndReminders"
-                  : tool.href === "/date-difference"
-                    ? "nav.daysAndWeeks"
-                    : tool.href === "/holidays"
-                      ? "nav.historyAndDates"
-                      : "nav.worldClock";
-
-    return {
-      href: tool.href,
-      labelKey: `nav.${keyBase}` as TranslationKey,
-      defaultLabel: tool.title,
-      icon: tool.icon,
-      descriptionKey: descriptionKey as TranslationKey,
-      defaultDescription: tool.navDescription,
-    };
-  }),
+  ...TOOL_DEFINITIONS.map((tool) => ({
+    href: tool.href,
+    labelKey: tool.titleKey,
+    defaultLabel: tool.title,
+    icon: tool.icon,
+    descriptionKey: tool.descriptionKey,
+    defaultDescription: tool.navDescription,
+  })),
 ];
 
 export function Sidebar() {
@@ -93,7 +53,7 @@ export function Sidebar() {
   return (
     <>
       <aside className="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-30 lg:block lg:w-[18.5rem] lg:p-5">
-        <div className="glass-surface flex h-full flex-col overflow-y-auto rounded-[1.75rem] p-4">
+        <div className="glass-surface flex h-full flex-col overflow-hidden rounded-[1.75rem] p-4">
           <Link
             href="/"
             className="flex items-center justify-center rounded-2xl border border-slate-200/80 bg-white/95 p-4 shadow-sm dark:border-slate-700/80 dark:bg-slate-900/75"
@@ -111,8 +71,10 @@ export function Sidebar() {
 
           <EthiopianNow compact className="mt-3 shrink-0" />
 
+          {/* Only the link list scrolls, so the logo and clock stay put and the
+              card's rounded corners are never cut by a scrollbar. */}
           <nav
-            className="mt-4 flex min-h-0 flex-1 flex-col gap-2"
+            className="scrollbar-slim -mr-1.5 mt-4 flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-1.5"
             aria-label="Primary navigation"
           >
             {navItems.map((item, index) => {

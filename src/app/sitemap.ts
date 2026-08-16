@@ -1,20 +1,12 @@
 import type { MetadataRoute } from "next";
 
+import { TOOL_DEFINITIONS } from "@/lib/tool-registry";
+
 const siteUrl =
   process.env.NEXT_PUBLIC_SITE_URL?.trim() || "https://ethiotime.com";
 
-const ROUTES = [
-  "/",
-  "/date-converter",
-  "/age-calculator",
-  "/ethiopian-calendar",
-  "/amharic-keyboard",
-  "/note-taking",
-  "/event-planner",
-  "/date-difference",
-  "/holidays",
-  "/ethiopian-now",
-];
+// Derived from the registry so a removed tool can never linger in the sitemap.
+const ROUTES = ["/", ...TOOL_DEFINITIONS.map((tool) => tool.href)];
 
 const HIGH_PRIORITY_ROUTES = new Set([
   "/",

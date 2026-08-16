@@ -1,36 +1,15 @@
 "use client";
 
-import { useState, useEffect, useMemo, type MouseEvent } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { NotebookPen, Search, Star, Trash2, X } from "lucide-react";
+
 import { readJson, writeJson } from "@/lib/storage";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-} from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  Plus,
-  Trash2,
-  Search,
-  Star,
-  LayoutGrid,
-  Palette,
-  Loader2,
-  Sparkles,
-} from "lucide-react";
 import { cn } from "@/lib/utils";
 
-// --- Types & Constants ---
-
+/**
+ * The stored shape is kept as-is so notes written by earlier versions keep
+ * working; `title` and `color` are no longer authored, only displayed.
+ */
 interface Note {
   id: string;
   title: string;
@@ -42,490 +21,497 @@ interface Note {
 }
 
 const STORAGE_KEY = "modern-notes-data";
+
 type NotesTab = "all" | "favorites";
-type NoteDraft = Pick<Note, "title" | "content" | "color" | "tags" | "isFavorite">;
 
-const PASTEL_COLORS = [
-  { id: "default", value: "bg-background border-border", label: "Default" },
-  { id: "red", value: "bg-red-50 dark:bg-red-950/30 border-red-100 dark:border-red-900", label: "Red" },
-  { id: "orange", value: "bg-orange-50 dark:bg-orange-950/30 border-orange-100 dark:border-orange-900", label: "Orange" },
-  { id: "yellow", value: "bg-yellow-50 dark:bg-yellow-950/30 border-yellow-100 dark:border-yellow-900", label: "Yellow" },
-  { id: "green", value: "bg-green-50 dark:bg-green-950/30 border-green-100 dark:border-green-900", label: "Green" },
-  { id: "blue", value: "bg-blue-50 dark:bg-blue-950/30 border-blue-100 dark:border-blue-900", label: "Blue" },
-  { id: "teal", value: "bg-teal-50 dark:bg-teal-950/30 border-teal-100 dark:border-teal-900", label: "Teal" },
-];
+/** Long notes are cut to roughly five lines until the reader asks for more. */
+const COLLAPSED_HEIGHT = "max-h-[7.5rem]";
 
-const INITIAL_NOTE: Note = {
-  id: "welcome",
-  title: "Welcome to Notes",
-  content: "Your notes are now saved automatically to your browser!\n\n• They won't disappear on refresh\n• Click the trash icon to delete them",
-  color: "default",
-  tags: ["tutorial"],
-  isFavorite: false,
-  updatedAt: Date.now(),
-};
-
-const createEmptyDraft = (): NoteDraft => ({
-  title: "",
-  content: "",
-  color: "default",
-  tags: [],
-  isFavorite: false,
-});
-
-const loadNotesFromStorage = (): Note[] => {
-  const parsed = readJson<Note[] | null>(STORAGE_KEY, null, (value): value is Note[] =>
+const loadNotesFromStorage = (): Note[] =>
+  readJson<Note[]>(STORAGE_KEY, [], (value): value is Note[] =>
     Array.isArray(value)
   );
-  return parsed && parsed.length > 0 ? parsed : [INITIAL_NOTE];
-};
 
-// --- Main Component ---
+/** Tags are written inline as #hashtags and pulled out of the text on save. */
+function extractTags(content: string): string[] {
+  const matches = content.match(/#[\p{L}\p{N}_-]+/gu) ?? [];
+  return Array.from(new Set(matches.map((tag) => tag.slice(1).toLowerCase())));
+}
 
-export default function NoteTaking() {
-  // State
-  const [notes, setNotes] = useState<Note[]>([]);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [activeTab, setActiveTab] = useState<NotesTab>("all");
-  const [isMounted, setIsMounted] = useState(false);
-  
-  // Modal State
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingNote, setEditingNote] = useState<Note | null>(null);
-  
-  // Form State
-  const [formData, setFormData] = useState<Partial<Note>>({});
-  const [tagInput, setTagInput] = useState("");
+const MINUTE = 60_000;
+const HOUR = 60 * MINUTE;
+const DAY = 24 * HOUR;
 
-  // 1. Hydration & Loading Logic
+function relativeTime(timestamp: number, now: number): string {
+  const elapsed = now - timestamp;
+  if (elapsed < MINUTE) return "just now";
+  if (elapsed < HOUR) return `${Math.floor(elapsed / MINUTE)}m ago`;
+  if (elapsed < DAY) return `${Math.floor(elapsed / HOUR)}h ago`;
+  if (elapsed < 7 * DAY) return `${Math.floor(elapsed / DAY)}d ago`;
+  return new Date(timestamp).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+/**
+ * Note text with #tags highlighted, clamped to a few lines while it overflows.
+ * Whether the note is actually too tall is measured rather than guessed, so
+ * short notes never get a pointless "Show more".
+ */
+function NoteBody({ content, title }: { content: string; title: string }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [isOverflowing, setIsOverflowing] = useState(false);
+  const bodyRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
-    setIsMounted(true);
-    setNotes(loadNotesFromStorage());
-  }, []);
+    const element = bodyRef.current;
+    // Once expanded the element no longer overflows, so skip re-measuring and
+    // keep the toggle available for collapsing again.
+    if (!element || isExpanded) return;
 
-  // 2. Saving Logic (Auto-save to LocalStorage)
-  useEffect(() => {
-    if (isMounted) {
-      writeJson(STORAGE_KEY, notes);
-    }
-  }, [notes, isMounted]);
+    const measure = () =>
+      setIsOverflowing(element.scrollHeight > element.clientHeight + 4);
 
-  // --- Actions ---
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [content, isExpanded]);
 
-  const handleOpenModal = (note?: Note) => {
-    if (note) {
-      setEditingNote(note);
-      setFormData({ ...note });
-    } else {
-      setEditingNote(null);
-      setFormData(createEmptyDraft());
-    }
-    setTagInput("");
-    setIsModalOpen(true);
-  };
-
-  const handleSave = () => {
-    if (!formData.title?.trim() && !formData.content?.trim()) {
-      setIsModalOpen(false);
-      return;
-    }
-
-    const timestamp = Date.now();
-    const normalizedTags = (formData.tags ?? []).reduce<string[]>((acc, tag) => {
-      const cleanedTag = tag.trim();
-      if (!cleanedTag) return acc;
-
-      const alreadyIncluded = acc.some(
-        (currentTag) => currentTag.toLowerCase() === cleanedTag.toLowerCase()
-      );
-      if (!alreadyIncluded) {
-        acc.push(cleanedTag);
-      }
-      return acc;
-    }, []);
-    
-    if (editingNote) {
-      setNotes((prev) =>
-        prev.map((n) =>
-          n.id === editingNote.id
-            ? { ...n, ...formData, tags: normalizedTags, updatedAt: timestamp }
-            : n
-        )
-      );
-    } else {
-      const newNote: Note = {
-        id: crypto.randomUUID(),
-        title: formData.title || "",
-        content: formData.content || "",
-        color: formData.color || "default",
-        tags: normalizedTags,
-        isFavorite: formData.isFavorite || false,
-        updatedAt: timestamp,
-      };
-      setNotes((prev) => [newNote, ...prev]);
-    }
-    setIsModalOpen(false);
-  };
-
-  const handleDelete = (id: string) => {
-    if (window.confirm("Delete this note permanently?")) {
-      setNotes((prev) => prev.filter((n) => n.id !== id));
-      if (editingNote?.id === id) setIsModalOpen(false);
-    }
-  };
-
-  const togglePin = (e: MouseEvent, id: string) => {
-    e.stopPropagation();
-    setNotes((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, isFavorite: !n.isFavorite } : n))
-    );
-  };
-
-  const addTagToDraft = (rawTag: string) => {
-    const tag = rawTag.trim().replace(/^#/, "");
-    if (!tag) return;
-
-    setFormData((previous) => {
-      const currentTags = previous.tags ?? [];
-      const exists = currentTags.some(
-        (currentTag) => currentTag.toLowerCase() === tag.toLowerCase()
-      );
-      if (exists) return previous;
-
-      return { ...previous, tags: [...currentTags, tag] };
-    });
-    setTagInput("");
-  };
-
-  const removeTagFromDraft = (tagToRemove: string) => {
-    setFormData((previous) => ({
-      ...previous,
-      tags: (previous.tags ?? []).filter((tag) => tag !== tagToRemove),
-    }));
-  };
-
-  // --- Filtering ---
-
-  const filteredNotes = useMemo(() => {
-    return notes
-      .filter((note) => {
-        const matchesSearch =
-          note.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          note.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          note.tags.some((t) => t.toLowerCase().includes(searchQuery.toLowerCase()));
-        
-        const matchesTab = activeTab === "all" || (activeTab === "favorites" && note.isFavorite);
-
-        return matchesSearch && matchesTab;
-      })
-      .sort((a, b) => {
-        if (a.isFavorite === b.isFavorite) return b.updatedAt - a.updatedAt;
-        return a.isFavorite ? -1 : 1;
-      });
-  }, [notes, searchQuery, activeTab]);
-
-  const getColorClass = (colorId: string) => 
-    PASTEL_COLORS.find(c => c.id === colorId)?.value || PASTEL_COLORS[0].value;
-
-  const favoriteCount = useMemo(
-    () => notes.filter((note) => note.isFavorite).length,
-    [notes]
-  );
-
-  // --- Render ---
-
-  if (!isMounted) {
-    return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
-    );
-  }
+  const segments = content.split(/(#[\p{L}\p{N}_-]+)/gu);
 
   return (
-    <div className="relative min-h-[calc(100dvh-8rem)] rounded-[2rem] bg-gradient-to-b from-slate-50/90 via-white to-teal-50/40 font-sans text-slate-900 dark:from-slate-950 dark:via-slate-950 dark:to-teal-950/20 dark:text-slate-100">
-      
-      {/* 1. Navbar */}
-      <header className="glass-surface sticky top-2 z-40 mx-2 rounded-2xl border border-white/70 bg-white/75 dark:border-white/10 dark:bg-slate-900/75">
-        <div className="container mx-auto flex flex-wrap items-center gap-3 px-4 py-3 sm:h-16 sm:flex-nowrap sm:py-0">
-          <div className="order-1 mr-auto flex items-center gap-2">
-            <div className="rounded-xl bg-teal-100 p-2 dark:bg-teal-900/40">
-              <LayoutGrid className="w-5 h-5 text-primary" />
-            </div>
-            <div className="hidden sm:block">
-              <h1 className="text-lg font-bold tracking-tight">NoteSpace</h1>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
-                Organized + Fast
-              </p>
-            </div>
-          </div>
+    <div>
+      <div
+        ref={bodyRef}
+        className={cn(
+          "relative overflow-hidden",
+          !isExpanded && COLLAPSED_HEIGHT
+        )}
+      >
+        {title && (
+          <p className="mb-1 font-semibold text-slate-900 dark:text-white">
+            {title}
+          </p>
+        )}
+        <p className="whitespace-pre-wrap break-words text-[15px] leading-relaxed text-slate-700 dark:text-slate-300">
+          {segments.map((segment, index) =>
+            segment.startsWith("#") && segment.length > 1 ? (
+              <span
+                key={index}
+                className="font-medium text-teal-600 dark:text-teal-400"
+              >
+                {segment}
+              </span>
+            ) : (
+              segment
+            )
+          )}
+        </p>
 
-          <div className="order-3 relative basis-full sm:order-2 sm:max-w-md sm:flex-1 sm:basis-auto">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search notes..."
-              className="h-10 rounded-full border-transparent bg-white/70 pl-9 transition-all focus:bg-white dark:bg-slate-900/60 dark:focus:bg-slate-900"
-            />
-          </div>
+        {/* Fades the cut line so it reads as truncated, not as a hard crop. */}
+        {!isExpanded && isOverflowing && (
+          <div
+            className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-white to-transparent dark:from-slate-900"
+            aria-hidden="true"
+          />
+        )}
+      </div>
 
-          <div className="order-2 flex items-center gap-1 sm:order-3">
-            <Button
-              variant={activeTab === "all" ? "secondary" : "ghost"}
-              size="sm"
-              onClick={() => setActiveTab("all")}
-              className="rounded-full px-3 sm:px-4"
-            >
-              All
-            </Button>
-            <Button
-              variant={activeTab === "favorites" ? "secondary" : "ghost"}
-              size="sm"
-              onClick={() => setActiveTab("favorites")}
-              className="rounded-full px-3 sm:px-4"
-            >
-              Favorites
-            </Button>
-          </div>
-        </div>
-      </header>
+      {isOverflowing && (
+        <button
+          type="button"
+          onClick={() => setIsExpanded((value) => !value)}
+          aria-expanded={isExpanded}
+          className="mt-1 text-xs font-semibold text-teal-600 transition-colors hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300"
+        >
+          {isExpanded ? "Show less" : "Show more"}
+        </button>
+      )}
+    </div>
+  );
+}
 
-      {/* 2. Main Content */}
-      <main className="container mx-auto px-4 py-8">
-        <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <div className="rounded-2xl border border-slate-200/70 bg-white/75 px-3 py-2.5 dark:border-slate-700/70 dark:bg-slate-900/65">
-            <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">All Notes</div>
-            <div className="mt-1 text-xl font-black text-slate-900 dark:text-white">{notes.length}</div>
-          </div>
-          <div className="rounded-2xl border border-slate-200/70 bg-white/75 px-3 py-2.5 dark:border-slate-700/70 dark:bg-slate-900/65">
-            <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Favorites</div>
-            <div className="mt-1 text-xl font-black text-slate-900 dark:text-white">{favoriteCount}</div>
-          </div>
-          <div className="rounded-2xl border border-slate-200/70 bg-white/75 px-3 py-2.5 dark:border-slate-700/70 dark:bg-slate-900/65">
-            <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Visible</div>
-            <div className="mt-1 text-xl font-black text-slate-900 dark:text-white">{filteredNotes.length}</div>
-          </div>
-          <div className="rounded-2xl border border-teal-100/80 bg-teal-50/70 px-3 py-2.5 dark:border-teal-900/50 dark:bg-teal-950/20">
-            <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-teal-700 dark:text-teal-300">Auto Saved</div>
-            <div className="mt-1 flex items-center gap-1.5 text-sm font-bold text-teal-800 dark:text-teal-200">
-              <Sparkles className="h-4 w-4" />
-              Local browser storage
-            </div>
-          </div>
-        </div>
+export default function NoteTaking() {
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [isMounted, setIsMounted] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [isComposerFocused, setIsComposerFocused] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeTab, setActiveTab] = useState<NotesTab>("all");
+  const [activeTag, setActiveTag] = useState<string | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+  const composerRef = useRef<HTMLTextAreaElement>(null);
 
-        {filteredNotes.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-center opacity-60">
-            <div className="mb-4 rounded-full bg-slate-100 p-4 dark:bg-slate-900">
-              {searchQuery ? <Search className="w-8 h-8" /> : <Plus className="w-8 h-8" />}
-            </div>
-            <p className="text-lg font-medium">
-              {searchQuery ? "No notes match your search" : "Start by creating a note"}
+  useEffect(() => {
+    setNotes(loadNotesFromStorage());
+    setIsMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (isMounted) writeJson(STORAGE_KEY, notes);
+  }, [notes, isMounted]);
+
+  // Keeps the "5m ago" stamps honest without re-rendering constantly.
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), MINUTE);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  // The composer grows with the text instead of holding a fixed empty box.
+  useEffect(() => {
+    const element = composerRef.current;
+    if (!element) return;
+    element.style.height = "auto";
+    element.style.height = `${Math.min(element.scrollHeight, 320)}px`;
+  }, [draft]);
+
+  const allTags = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const note of notes) {
+      for (const tag of note.tags) {
+        counts.set(tag, (counts.get(tag) ?? 0) + 1);
+      }
+    }
+    return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
+  }, [notes]);
+
+  const visibleNotes = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+
+    return notes
+      .filter((note) => {
+        if (activeTab === "favorites" && !note.isFavorite) return false;
+        if (activeTag && !note.tags.includes(activeTag)) return false;
+        if (!query) return true;
+        return `${note.title} ${note.content}`.toLowerCase().includes(query);
+      })
+      .sort((a, b) => {
+        if (a.isFavorite !== b.isFavorite) return a.isFavorite ? -1 : 1;
+        return b.updatedAt - a.updatedAt;
+      });
+  }, [notes, searchQuery, activeTab, activeTag]);
+
+  const isComposerOpen = isComposerFocused || draft.length > 0;
+  // The wide two-column layout only earns its place once there is a feed and a
+  // filter rail to put in it.
+  const hasNotes = isMounted && notes.length > 0;
+
+  const saveDraft = () => {
+    const content = draft.trim();
+    if (!content) return;
+
+    if (editingId) {
+      setNotes((previous) =>
+        previous.map((note) =>
+          note.id === editingId
+            ? { ...note, content, tags: extractTags(content), updatedAt: Date.now() }
+            : note
+        )
+      );
+      setEditingId(null);
+    } else {
+      setNotes((previous) => [
+        {
+          id:
+            globalThis.crypto?.randomUUID?.() ??
+            `note-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+          title: "",
+          content,
+          color: "default",
+          tags: extractTags(content),
+          isFavorite: false,
+          updatedAt: Date.now(),
+        },
+        ...previous,
+      ]);
+    }
+
+    setDraft("");
+  };
+
+  const startEditing = (note: Note) => {
+    setEditingId(note.id);
+    setDraft(note.content);
+    composerRef.current?.focus();
+    composerRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+  };
+
+  const cancelEditing = () => {
+    setEditingId(null);
+    setDraft("");
+  };
+
+  const toggleFavorite = (id: string) => {
+    setNotes((previous) =>
+      previous.map((note) =>
+        note.id === id ? { ...note, isFavorite: !note.isFavorite } : note
+      )
+    );
+  };
+
+  const deleteNote = (id: string) => {
+    setNotes((previous) => previous.filter((note) => note.id !== id));
+    if (editingId === id) cancelEditing();
+  };
+
+  const handleComposerKeyDown = (event: React.KeyboardEvent) => {
+    if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+      event.preventDefault();
+      saveDraft();
+    }
+    if (event.key === "Escape" && editingId) cancelEditing();
+  };
+
+  return (
+    <section
+      className={cn(
+        "mx-auto w-full max-w-2xl px-1 py-2",
+        hasNotes && "lg:max-w-6xl"
+      )}
+    >
+      <div
+        className={cn(
+          hasNotes &&
+            "lg:grid lg:grid-cols-[minmax(0,1fr)_17rem] lg:items-start lg:gap-x-8"
+        )}
+      >
+        <header className="mb-5 flex items-end justify-between gap-4 lg:col-start-1 lg:row-start-1">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
+              Notes
+            </h1>
+            <p className="mt-1.5 text-sm text-slate-600 dark:text-slate-400">
+              Saved on this device. Add #tags anywhere in the text.
             </p>
           </div>
-        ) : (
-          <div className="columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-4 space-y-4 pb-24">
-            {filteredNotes.map((note) => (
-              <div
-                key={note.id}
-                onClick={() => handleOpenModal(note)}
-                className={cn(
-                  "group relative break-inside-avoid rounded-2xl border p-5 cursor-pointer hover:shadow-lg transition-all duration-300 ease-out",
-                  getColorClass(note.color)
-                )}
-              >
-                {/* Actions */}
-                <div className="absolute top-3 right-3 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 rounded-full bg-black/5 hover:bg-black/10 dark:bg-white/10"
-                    onClick={(e) => togglePin(e, note.id)}
-                    aria-pressed={note.isFavorite}
-                  >
-                    <Star
-                      className={cn("w-4 h-4", note.isFavorite && "fill-yellow-500 text-yellow-500")}
-                      aria-hidden="true"
-                    />
-                    <span className="sr-only">
-                      {note.isFavorite ? "Remove from favorites" : "Add to favorites"}
-                    </span>
-                  </Button>
-                </div>
+          {isMounted && notes.length > 0 && (
+            <span className="shrink-0 pb-1 text-sm tabular-nums text-slate-400 dark:text-slate-500">
+              {notes.length}
+            </span>
+          )}
+        </header>
 
-                {note.isFavorite && (
-                  <div className="absolute top-3 right-3 group-hover:opacity-0 transition-opacity">
-                    <Star className="w-4 h-4 fill-yellow-500 text-yellow-500" />
-                  </div>
-                )}
-
-                <h3 className={cn("font-bold text-lg mb-2 leading-tight", !note.title && "text-muted-foreground italic")}>
-                  {note.title || "Untitled"}
-                </h3>
-                
-                <p className="text-sm text-foreground/80 whitespace-pre-wrap line-clamp-[8] leading-relaxed">
-                  {note.content}
-                </p>
-
-                <div className="mt-4 flex flex-wrap items-center gap-2">
-                  {note.tags.map((tag, index) => (
-                     <Badge key={`${tag}-${index}`} variant="secondary" className="bg-black/5 dark:bg-white/10 text-[10px] hover:bg-black/10 h-5 px-1.5 font-normal text-foreground/70">
-                       #{tag}
-                     </Badge>
-                  ))}
-                  <div className="ml-auto text-[10px] text-muted-foreground font-medium flex items-center gap-1">
-                    {new Date(note.updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </main>
-
-      {/* 3. FAB */}
-      <Button
-        onClick={() => handleOpenModal()}
-        size="lg"
-        className="fixed bottom-6 right-6 z-40 h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-xl transition-transform hover:scale-105 hover:bg-primary/90 active:scale-95 md:bottom-8 md:right-8"
-      >
-        <Plus className="w-7 h-7" />
-        <span className="sr-only">Add Note</span>
-      </Button>
-
-      {/* 4. Edit/Create Dialog */}
-      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent 
+        {/* Composer — a single line until it is being used. */}
+        <div
           className={cn(
-            "sm:max-w-[600px] p-0 gap-0 overflow-hidden border-0 shadow-2xl",
-            getColorClass(formData.color || "default")
+            "rounded-2xl border bg-white transition-colors lg:col-start-1 lg:row-start-2 dark:bg-slate-900",
+            editingId
+              ? "border-teal-500 dark:border-teal-600"
+              : isComposerOpen
+                ? "border-slate-300 dark:border-slate-700"
+                : "border-slate-200 dark:border-slate-800"
           )}
         >
-          {/* Header with Padding */}
-          <DialogHeader className="px-6 pt-6 pb-2">
-            <Input
-              value={formData.title}
-              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              placeholder="Title"
-              className="text-2xl font-bold border-none shadow-none focus-visible:ring-0 px-0 bg-transparent placeholder:text-muted-foreground/50"
-            />
-          </DialogHeader>
-          
-          {/* Body with INCREASED PADDING (p-6) */}
-          <div className="flex-1 overflow-y-auto max-h-[60vh]">
-            <Textarea
-              value={formData.content}
-              onChange={(e) => setFormData({ ...formData, content: e.target.value })}
-              placeholder="Take a note..."
-              className="min-h-[300px] w-full resize-none text-base leading-relaxed border-none shadow-none focus-visible:ring-0 p-6 bg-transparent placeholder:text-muted-foreground/50"
-            />
-            <div className="border-t border-black/5 px-6 py-4 dark:border-white/10">
-              <div className="mb-2 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
-                Tags
-              </div>
-              <div className="flex items-center gap-2">
-                <Input
-                  value={tagInput}
-                  onChange={(e) => setTagInput(e.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      addTagToDraft(tagInput);
-                    }
-                  }}
-                  placeholder="Add tag and press Enter"
-                  className="h-9 bg-white/70 dark:bg-slate-900/60"
-                />
-                <Button
+          <textarea
+            ref={composerRef}
+            rows={1}
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            onFocus={() => setIsComposerFocused(true)}
+            onBlur={() => setIsComposerFocused(false)}
+            onKeyDown={handleComposerKeyDown}
+            placeholder="Write a note…"
+            aria-label={editingId ? "Edit note" : "Write a new note"}
+            className="scrollbar-slim block max-h-80 min-h-[3rem] w-full resize-none overflow-y-auto bg-transparent px-4 py-3.5 text-[15px] leading-relaxed text-slate-900 outline-none placeholder:text-slate-400 dark:text-slate-100"
+          />
+          {isComposerOpen && (
+            <div className="flex items-center justify-between gap-3 border-t border-slate-100 px-3 py-2 dark:border-slate-800">
+              <span className="pl-1 text-xs text-slate-400 dark:text-slate-500">
+                {editingId ? "Editing · Esc to cancel" : "Ctrl + Enter to save"}
+              </span>
+              <div className="flex items-center gap-1.5">
+                {editingId && (
+                  <button
+                    type="button"
+                    onClick={cancelEditing}
+                    className="rounded-lg px-3 py-1.5 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
+                  >
+                    Cancel
+                  </button>
+                )}
+                <button
                   type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => addTagToDraft(tagInput)}
-                  disabled={!tagInput.trim()}
+                  onClick={saveDraft}
+                  disabled={!draft.trim()}
+                  className="rounded-lg bg-teal-600 px-4 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  Add
-                </Button>
+                  {editingId ? "Update" : "Save"}
+                </button>
               </div>
-              {(formData.tags?.length ?? 0) > 0 && (
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {(formData.tags ?? []).map((tag, index) => (
-                    <button
-                      key={`${tag}-${index}`}
-                      type="button"
-                      onClick={() => removeTagFromDraft(tag)}
-                      className="rounded-full border border-slate-200 bg-white/80 px-2.5 py-1 text-[11px] font-medium text-slate-600 transition-colors hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300 dark:hover:bg-slate-800"
-                    >
-                      #{tag} ×
-                    </button>
-                  ))}
-                </div>
-              )}
             </div>
-          </div>
+          )}
+        </div>
 
-          {/* Footer */}
-          <DialogFooter className="px-6 py-4 bg-black/5 dark:bg-black/20 flex items-center justify-between sm:justify-between">
-            <div className="flex items-center gap-1">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-black/5">
-                    <Palette className="w-4 h-4 opacity-70" aria-hidden="true" />
-                    <span className="sr-only">Choose note colour</span>
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-48 p-2">
-                  <div className="grid grid-cols-4 gap-1">
-                    {PASTEL_COLORS.map((c) => (
-                      <button
-                        key={c.id}
-                        onClick={() => setFormData({ ...formData, color: c.id })}
-                        className={cn(
-                          "w-8 h-8 rounded-full border border-black/10",
-                          c.value,
-                          formData.color === c.id && "ring-2 ring-primary ring-offset-2"
-                        )}
-                        title={c.label}
-                      />
-                    ))}
-                  </div>
-                </DropdownMenuContent>
-              </DropdownMenu>
-
-              <Button
-                variant="ghost"
-                size="icon"
-                className={cn("h-8 w-8 rounded-full hover:bg-black/5", formData.isFavorite && "text-yellow-600")}
-                onClick={() => setFormData({ ...formData, isFavorite: !formData.isFavorite })}
-                aria-pressed={Boolean(formData.isFavorite)}
-              >
-                <Star
-                  className={cn("w-4 h-4", formData.isFavorite && "fill-current")}
+        {/* Filters — hidden until there is something to filter; on a wide screen
+            they move into a sticky rail instead of stacking over the feed. */}
+        {hasNotes && (
+          <aside className="mt-5 lg:sticky lg:top-4 lg:col-start-2 lg:row-span-3 lg:row-start-1 lg:mt-0">
+            <div className="flex items-center gap-2 lg:flex-col lg:items-stretch">
+              <div className="relative min-w-0 flex-1">
+                <Search
+                  className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
                   aria-hidden="true"
                 />
-                <span className="sr-only">Mark as favorite</span>
-              </Button>
+                <input
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder="Search notes"
+                  aria-label="Search notes"
+                  className="h-9 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-900 outline-none transition-colors focus:border-teal-600 focus:ring-2 focus:ring-teal-600/20 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
+                />
+              </div>
 
-              {editingNote && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 rounded-full hover:bg-red-100 text-red-600 hover:text-red-700"
-                  onClick={() => handleDelete(editingNote.id)}
+              <div className="inline-flex shrink-0 rounded-lg bg-slate-100 p-0.5 lg:w-full dark:bg-slate-800">
+                {(["all", "favorites"] as const).map((tab) => (
+                  <button
+                    key={tab}
+                    type="button"
+                    onClick={() => setActiveTab(tab)}
+                    aria-pressed={activeTab === tab}
+                    className={cn(
+                      "rounded-md px-3 py-1.5 text-sm font-medium capitalize transition-colors lg:flex-1",
+                      activeTab === tab
+                        ? "bg-white text-slate-900 shadow-sm dark:bg-slate-950 dark:text-white"
+                        : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
+                    )}
+                  >
+                    {tab}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {allTags.length > 0 && (
+              /* One scrolling row on narrow screens so a long tag list never
+                 pushes the feed down; in the rail it simply wraps. */
+              <div className="scrollbar-slim mt-2.5 flex gap-1.5 overflow-x-auto pb-1.5 lg:flex-wrap lg:overflow-x-visible lg:pb-0">
+                {allTags.map(([tag, count]) => {
+                  const isActive = activeTag === tag;
+                  return (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => setActiveTag(isActive ? null : tag)}
+                      aria-pressed={isActive}
+                      className={cn(
+                        "inline-flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-xs transition-colors",
+                        isActive
+                          ? "border-teal-600 bg-teal-600 text-white"
+                          : "border-slate-200 text-slate-600 hover:border-teal-500 hover:text-teal-700 dark:border-slate-800 dark:text-slate-400 dark:hover:text-teal-400"
+                      )}
+                    >
+                      #{tag}
+                      <span
+                        className={cn(
+                          "tabular-nums",
+                          isActive
+                            ? "text-teal-100"
+                            : "text-slate-400 dark:text-slate-600"
+                        )}
+                      >
+                        {count}
+                      </span>
+                      {isActive && <X className="h-3 w-3" aria-hidden="true" />}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </aside>
+        )}
+
+        {/* Feed */}
+        <div className="mt-4 lg:col-start-1 lg:row-start-3">
+          {!isMounted ? (
+            <div
+              className="h-28 animate-pulse rounded-2xl bg-slate-100 dark:bg-slate-800"
+              aria-hidden="true"
+            />
+          ) : visibleNotes.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-slate-300 px-5 py-12 text-center dark:border-slate-800">
+              <NotebookPen
+                className="mx-auto h-7 w-7 text-slate-300 dark:text-slate-600"
+                aria-hidden="true"
+              />
+              <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
+                {notes.length === 0
+                  ? "No notes yet. Write your first one above."
+                  : "Nothing matches those filters."}
+              </p>
+            </div>
+          ) : (
+            /* Clamped cards keep a bounded height, so a wide screen can show two
+               columns without the ragged gaps a masonry layout would leave. */
+            <ul className="grid gap-2.5 xl:grid-cols-2">
+              {visibleNotes.map((note) => (
+                <li
+                  key={note.id}
+                  className={cn(
+                    "group flex flex-col rounded-2xl border bg-white px-4 py-3 transition-colors dark:bg-slate-900",
+                    note.isFavorite
+                      ? "border-amber-200 dark:border-amber-500/30"
+                      : "border-slate-200 hover:border-slate-300 dark:border-slate-800 dark:hover:border-slate-700"
+                  )}
                 >
-                  <Trash2 className="w-4 h-4" aria-hidden="true" />
-                  <span className="sr-only">Delete note</span>
-                </Button>
-              )}
-            </div>
+                  <div className="mb-1.5 flex items-center justify-between gap-3">
+                    <time
+                      className="text-xs text-slate-400 dark:text-slate-500"
+                      dateTime={new Date(note.updatedAt).toISOString()}
+                    >
+                      {relativeTime(note.updatedAt, now)}
+                    </time>
 
-            <div className="flex gap-2">
-               <Button variant="ghost" onClick={() => setIsModalOpen(false)}>Close</Button>
-               <Button onClick={handleSave}>Save</Button>
-            </div>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
+                    {/* Kept visible rather than hover-only, so the actions are
+                        reachable on touch devices too. */}
+                    <div className="-mr-1.5 flex items-center gap-0.5">
+                      <button
+                        type="button"
+                        onClick={() => toggleFavorite(note.id)}
+                        aria-pressed={note.isFavorite}
+                        className="rounded-md p-1.5 text-slate-300 transition-colors hover:bg-slate-100 hover:text-amber-500 dark:text-slate-600 dark:hover:bg-slate-800"
+                      >
+                        <Star
+                          className={cn(
+                            "h-4 w-4",
+                            note.isFavorite && "fill-amber-400 text-amber-400"
+                          )}
+                          aria-hidden="true"
+                        />
+                        <span className="sr-only">
+                          {note.isFavorite
+                            ? "Remove from favorites"
+                            : "Add to favorites"}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => startEditing(note)}
+                        className="rounded-md px-2 py-1.5 text-xs font-medium text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:text-slate-500 dark:hover:bg-slate-800 dark:hover:text-slate-100"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => deleteNote(note.id)}
+                        className="rounded-md p-1.5 text-slate-300 transition-colors hover:bg-rose-50 hover:text-rose-600 dark:text-slate-600 dark:hover:bg-rose-950/40 dark:hover:text-rose-400"
+                      >
+                        <Trash2 className="h-4 w-4" aria-hidden="true" />
+                        <span className="sr-only">Delete note</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <NoteBody content={note.content} title={note.title} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    </section>
   );
 }
