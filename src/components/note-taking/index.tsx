@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import {
+  BookOpen,
   Code2,
   Download,
   FileText,
@@ -15,31 +16,11 @@ import {
   X,
 } from "lucide-react";
 
-import dynamic from "next/dynamic";
-
+import { MarkdownView } from "@/components/note-taking/markdown-lazy";
+import { NoteReader } from "@/components/note-taking/note-reader";
+import { previewOf } from "@/lib/markdown-preview";
 import { readJson, writeJson } from "@/lib/storage";
 import { cn } from "@/lib/utils";
-
-/**
- * The renderer carries the TeX typesetter and the syntax highlighter, which
- * together outweigh everything else on the page. Notes are read from this
- * device after mount anyway, so nothing is lost by fetching it separately.
- */
-const MarkdownView = dynamic(
-  () =>
-    import("@/components/note-taking/markdown-view").then(
-      (module) => module.MarkdownView
-    ),
-  {
-    ssr: false,
-    loading: () => (
-      <div
-        className="h-14 animate-pulse rounded-lg bg-slate-100 dark:bg-slate-800"
-        aria-hidden="true"
-      />
-    ),
-  }
-);
 
 /**
  * The stored shape is kept as-is so notes written by earlier versions keep
@@ -127,15 +108,23 @@ function NoteBody({
   title,
   isExpanded,
   onToggle,
+  onRead,
 }: {
   content: string;
   title: string;
   isExpanded: boolean;
   onToggle: () => void;
+  onRead: () => void;
 }) {
   const [isOverflowing, setIsOverflowing] = useState(false);
   const bodyRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+
+  // A collapsed card shows a few lines, so only those are parsed and typeset.
+  // Rendering the whole note and hiding the rest in CSS meant a feed of long
+  // notes spent seconds typesetting formulas nobody could see.
+  const preview = useMemo(() => previewOf(content), [content]);
+  const canExpand = preview.truncated || isOverflowing;
 
   // Collapsing a long note pulls everything below it upwards, which can leave
   // the reader looking at a completely different part of the feed.
@@ -154,7 +143,7 @@ function NoteBody({
     const element = bodyRef.current;
     // Once expanded the element no longer overflows, so skip re-measuring and
     // keep the toggle available for collapsing again.
-    if (!element || isExpanded) return;
+    if (!element || isExpanded || preview.truncated) return;
 
     const measure = () =>
       setIsOverflowing(element.scrollHeight > element.clientHeight + 4);
@@ -170,7 +159,7 @@ function NoteBody({
       observer.disconnect();
       window.clearTimeout(settle);
     };
-  }, [content, isExpanded]);
+  }, [content, isExpanded, preview.truncated]);
 
   return (
     <div ref={rootRef}>
@@ -178,7 +167,7 @@ function NoteBody({
         ref={bodyRef}
         className={cn(
           "relative overflow-hidden",
-          !isExpanded && COLLAPSED_HEIGHT
+          isExpanded ? "note-reading" : COLLAPSED_HEIGHT
         )}
       >
         {title && (
@@ -186,13 +175,10 @@ function NoteBody({
             {title}
           </p>
         )}
-        <MarkdownView
-          content={content}
-          className={isExpanded ? "note-reading" : undefined}
-        />
+        <MarkdownView content={isExpanded ? content : preview.text} />
 
         {/* Fades the cut line so it reads as truncated, not as a hard crop. */}
-        {!isExpanded && isOverflowing && (
+        {!isExpanded && canExpand && (
           <div
             className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-white to-transparent dark:from-slate-900"
             aria-hidden="true"
@@ -200,16 +186,26 @@ function NoteBody({
         )}
       </div>
 
-      {isOverflowing && (
+      <div className="mt-1.5 flex items-center gap-3">
+        {canExpand && (
+          <button
+            type="button"
+            onClick={handleToggle}
+            aria-expanded={isExpanded}
+            className="text-xs font-semibold text-teal-600 transition-colors hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300"
+          >
+            {isExpanded ? "Show less" : "Show more"}
+          </button>
+        )}
         <button
           type="button"
-          onClick={handleToggle}
-          aria-expanded={isExpanded}
-          className="mt-1 text-xs font-semibold text-teal-600 transition-colors hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300"
+          onClick={onRead}
+          className="inline-flex items-center gap-1 text-xs font-medium text-slate-400 transition-colors hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-200"
         >
-          {isExpanded ? "Show less" : "Show more"}
+          <BookOpen className="h-3.5 w-3.5" aria-hidden="true" />
+          Read
         </button>
-      )}
+      </div>
     </div>
   );
 }
@@ -232,6 +228,7 @@ export default function NoteTaking() {
   const [expandedIds, setExpandedIds] = useState<ReadonlySet<string>>(
     () => new Set()
   );
+  const [readerNote, setReaderNote] = useState<Note | null>(null);
   const [printNote, setPrintNote] = useState<Note | null>(null);
   const [exportingId, setExportingId] = useState<string | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
@@ -776,6 +773,7 @@ export default function NoteTaking() {
                     title={note.title}
                     isExpanded={expandedIds.has(note.id)}
                     onToggle={() => toggleExpanded(note.id)}
+                    onRead={() => setReaderNote(note)}
                   />
                 </li>
               ))}
@@ -783,6 +781,14 @@ export default function NoteTaking() {
           )}
         </div>
       </div>
+
+      {readerNote && (
+        <NoteReader
+          title={noteHeading(readerNote)}
+          content={readerNote.content}
+          onClose={() => setReaderNote(null)}
+        />
+      )}
 
       {exportError && (
         <p

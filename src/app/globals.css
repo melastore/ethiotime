@@ -325,6 +325,79 @@
   max-width: min(92ch, 100%);
 }
 
+/*
+ * Full-screen reader. The palette is the reader's own rather than the app's:
+ * someone reading a long derivation may want a warm page while the rest of the
+ * interface stays dark, so these tokens override the note ones.
+ */
+.note-reader {
+  --reader-bg: #ffffff;
+  --reader-fg: #1f2328;
+  --reader-muted: #59636e;
+  --reader-border: #d8dee4;
+  --reader-surface: #f2f4f7;
+  background: var(--reader-bg);
+  color: var(--reader-fg);
+}
+
+.note-reader[data-reader-theme="sepia"] {
+  --reader-bg: #f4ecd8;
+  --reader-fg: #43382a;
+  --reader-muted: #6f6151;
+  --reader-border: #ddcfb2;
+  --reader-surface: #eae0c8;
+}
+
+.note-reader[data-reader-theme="dark"] {
+  --reader-bg: #16181d;
+  --reader-fg: #dbe0e6;
+  --reader-muted: #98a1ad;
+  --reader-border: #333941;
+  --reader-surface: #21252c;
+}
+
+.note-reader header {
+  border-color: var(--reader-border);
+  background: var(--reader-bg);
+}
+
+.note-reader .note-prose {
+  --note-border: var(--reader-border);
+  --note-muted: var(--reader-muted);
+  --note-surface: var(--reader-surface);
+  color: var(--reader-fg);
+  /* Driven by the reader's own size control rather than the base scale. */
+  font-size: inherit;
+}
+
+.note-reader-title {
+  font-family: var(--font-fraunces), serif;
+  font-size: 1.9em;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.note-reader-control {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 1.75rem;
+  width: 1.75rem;
+  border-radius: 0.5rem;
+  color: var(--reader-muted);
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.note-reader-control:hover:not(:disabled) {
+  background: var(--reader-surface);
+  color: var(--reader-fg);
+}
+
+.note-reader-control:disabled {
+  opacity: 0.35;
+}
+
 /* Headings breathe more once there is room for a real document. */
 .note-reading h1,
 .note-reading h2 {
