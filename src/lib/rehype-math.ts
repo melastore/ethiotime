@@ -13,7 +13,7 @@ import katex from "katex";
 import "katex/contrib/mhchem";
 import { fromHtmlIsomorphic } from "hast-util-from-html-isomorphic";
 import { toText } from "hast-util-to-text";
-import { visit } from "unist-util-visit";
+import { visitParents } from "unist-util-visit-parents";
 import type { Element, ElementContent, Root } from "hast";
 
 export type RehypeMathOptions = {
@@ -38,17 +38,33 @@ export function rehypeMath(options: RehypeMathOptions = {}) {
   return (tree: Root) => {
     const pending: Pending[] = [];
 
-    visit(tree, "element", (node, index, parent) => {
-      if (index === undefined || !parent) return;
-
+    visitParents(tree, "element", (node, ancestors) => {
       const classes = classListOf(node);
-      const displayMode = classes.includes("math-display");
+      let displayMode = classes.includes("math-display");
       if (!displayMode && !classes.includes("math-inline")) return;
 
+      // `remark-math` renders a `$$` block as `<pre><code class="math-display">`.
+      // Replacing only the `<code>` would leave the `<pre>` behind, and this
+      // project styles `<pre>` as a code listing — so every display formula
+      // would sit inside a bordered grey code panel.
+      let target: Element = node;
+      let parent = ancestors[ancestors.length - 1] as Element | Root | undefined;
+
+      if (node.tagName === "code" && (parent as Element)?.tagName === "pre") {
+        target = parent as Element;
+        parent = ancestors[ancestors.length - 2] as Element | Root | undefined;
+        displayMode = true;
+      }
+
+      if (!parent) return;
+
+      const index = parent.children.indexOf(target);
+      if (index === -1) return;
+
       pending.push({
-        parent: parent as Element | Root,
+        parent,
         index,
-        value: toText(node, { whitespace: "pre" }),
+        value: toText(target, { whitespace: "pre" }),
         displayMode,
       });
     });

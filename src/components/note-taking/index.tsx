@@ -122,10 +122,33 @@ function relativeTime(timestamp: number, now: number): string {
  * Whether the note is actually too tall is measured rather than guessed, so
  * short notes never get a pointless "Show more".
  */
-function NoteBody({ content, title }: { content: string; title: string }) {
-  const [isExpanded, setIsExpanded] = useState(false);
+function NoteBody({
+  content,
+  title,
+  isExpanded,
+  onToggle,
+}: {
+  content: string;
+  title: string;
+  isExpanded: boolean;
+  onToggle: () => void;
+}) {
   const [isOverflowing, setIsOverflowing] = useState(false);
   const bodyRef = useRef<HTMLDivElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  // Collapsing a long note pulls everything below it upwards, which can leave
+  // the reader looking at a completely different part of the feed.
+  const handleToggle = () => {
+    const wasExpanded = isExpanded;
+    onToggle();
+
+    if (wasExpanded) {
+      requestAnimationFrame(() =>
+        rootRef.current?.scrollIntoView({ block: "nearest" })
+      );
+    }
+  };
 
   useEffect(() => {
     const element = bodyRef.current;
@@ -150,7 +173,7 @@ function NoteBody({ content, title }: { content: string; title: string }) {
   }, [content, isExpanded]);
 
   return (
-    <div>
+    <div ref={rootRef}>
       <div
         ref={bodyRef}
         className={cn(
@@ -163,7 +186,10 @@ function NoteBody({ content, title }: { content: string; title: string }) {
             {title}
           </p>
         )}
-        <MarkdownView content={content} />
+        <MarkdownView
+          content={content}
+          className={isExpanded ? "note-reading" : undefined}
+        />
 
         {/* Fades the cut line so it reads as truncated, not as a hard crop. */}
         {!isExpanded && isOverflowing && (
@@ -177,7 +203,7 @@ function NoteBody({ content, title }: { content: string; title: string }) {
       {isOverflowing && (
         <button
           type="button"
-          onClick={() => setIsExpanded((value) => !value)}
+          onClick={handleToggle}
           aria-expanded={isExpanded}
           className="mt-1 text-xs font-semibold text-teal-600 transition-colors hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300"
         >
@@ -199,10 +225,25 @@ export default function NoteTaking() {
   const [activeTag, setActiveTag] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [isPreview, setIsPreview] = useState(false);
+  // Held here rather than inside the note so the card itself can widen: an
+  // expanded note is being read, not scanned, and a formula, a code listing or
+  // a wide table has no room in a half-width column. A set rather than a single
+  // id, so opening one note does not collapse another out from under the reader.
+  const [expandedIds, setExpandedIds] = useState<ReadonlySet<string>>(
+    () => new Set()
+  );
   const [printNote, setPrintNote] = useState<Note | null>(null);
   const [exportingId, setExportingId] = useState<string | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
+
+  const toggleExpanded = (id: string) => {
+    setExpandedIds((current) => {
+      const next = new Set(current);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
+  };
 
   // PDF goes through the browser's print pipeline, which keeps formulas as
   // selectable vector text instead of a screenshot. The note is mounted into a
@@ -640,7 +681,10 @@ export default function NoteTaking() {
                 <li
                   key={note.id}
                   className={cn(
-                    "group flex flex-col rounded-2xl border bg-white px-4 py-3 transition-colors dark:bg-slate-900",
+                    "group flex flex-col rounded-2xl border bg-white transition-colors dark:bg-slate-900",
+                    expandedIds.has(note.id)
+                      ? "px-5 py-4 sm:px-7 sm:py-6 xl:col-span-2"
+                      : "px-4 py-3",
                     note.isFavorite
                       ? "border-amber-200 dark:border-amber-500/30"
                       : "border-slate-200 hover:border-slate-300 dark:border-slate-800 dark:hover:border-slate-700"
@@ -727,7 +771,12 @@ export default function NoteTaking() {
                     </div>
                   </div>
 
-                  <NoteBody content={note.content} title={note.title} />
+                  <NoteBody
+                    content={note.content}
+                    title={note.title}
+                    isExpanded={expandedIds.has(note.id)}
+                    onToggle={() => toggleExpanded(note.id)}
+                  />
                 </li>
               ))}
             </ul>

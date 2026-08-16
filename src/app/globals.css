@@ -292,6 +292,50 @@
   margin: 0.75em 0;
 }
 
+/*
+ * Reading view, used when a note is expanded and has the width of the page.
+ *
+ * Prose is held to a comfortable measure and centred, while code, tables and
+ * display formulas break out to the full width — those are what the extra room
+ * was for, and a derivation squeezed into a text column is the thing this is
+ * meant to fix. The three-column grid does both at once: everything sits in the
+ * middle track unless it opts out.
+ */
+.note-reading {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1fr)
+    min(68ch, 100%)
+    minmax(0, 1fr);
+  font-size: 1.02rem;
+  line-height: 1.75;
+}
+
+.note-reading > * {
+  grid-column: 2;
+}
+
+.note-reading > pre,
+.note-reading > table,
+.note-reading > .katex-display,
+.note-reading > blockquote {
+  grid-column: 1 / -1;
+  justify-self: center;
+  width: 100%;
+  max-width: min(92ch, 100%);
+}
+
+/* Headings breathe more once there is room for a real document. */
+.note-reading h1,
+.note-reading h2 {
+  margin-top: 1.6em;
+}
+
+.note-reading h1 {
+  padding-bottom: 0.25em;
+  border-bottom: 1px solid var(--note-border);
+}
+
 .note-prose ul,
 .note-prose ol {
   padding-left: 1.5em;
