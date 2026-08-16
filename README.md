@@ -14,9 +14,7 @@ planned events — keep it in the browser rather than on a server.
 | Amharic Keyboard | Type fidel by transliteration (`selam` gives ሰላም) |
 | Note Taking | Plain notes, stored locally |
 | Event Planner | Plan events in either calendar, with reminders and recurring rules |
-| Date Difference | Days and weeks between two dates |
 | Holiday Guide | Ethiopian public holidays, their dates and background |
-| Ethiopian Now | Ethiopian date and 12-hour clock across world cities |
 
 The interface is available in English and Amharic, and the app is installable as a PWA with an
 offline fallback.

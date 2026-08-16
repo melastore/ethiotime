@@ -161,7 +161,7 @@ export default function NoteTaking() {
     return () => window.clearInterval(timer);
   }, []);
 
-  // The composer grows with the text instead of holding a fixed empty box.
+  // The composer grows with the text.
   useEffect(() => {
     const element = composerRef.current;
     if (!element) return;
@@ -465,8 +465,7 @@ export default function NoteTaking() {
                       {relativeTime(note.updatedAt, now)}
                     </time>
 
-                    {/* Kept visible rather than hover-only, so the actions are
-                        reachable on touch devices too. */}
+                    {/* Always visible: hover-only controls are unreachable on touch. */}
                     <div className="-mr-1.5 flex items-center gap-0.5">
                       <button
                         type="button"

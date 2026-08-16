@@ -213,8 +213,8 @@ const EthiopianCalendar = () => {
             <ChevronRight className="h-4 w-4" aria-hidden="true" />
           </button>
 
-          {/* Available at every width — on mobile this was the only way to
-              change month or year, and it used to be hidden below `sm`. */}
+          {/* The only way to jump a month or year, so it stays available at
+              every width. */}
           <button
             type="button"
             onClick={() => setIsMonthPickerOpen((open) => !open)}
@@ -366,8 +366,7 @@ const EthiopianCalendar = () => {
                   {day.gregorian.day}
                 </span>
 
-                {/* Single holiday marker — the number is already tinted, so a
-                    ring on top of a dot only added noise. */}
+                {/* One marker only: the number is already tinted on a holiday. */}
                 <span
                   aria-hidden="true"
                   className={cn(
@@ -380,8 +379,7 @@ const EthiopianCalendar = () => {
 
             const key = `${day.ethiopian.year}-${day.ethiopian.month}-${day.ethiopian.day}`;
 
-            // Only holidays have anything to show, so only they are clickable —
-            // an ordinary day opening an empty dialog was just a dead end.
+            // Only holidays have anything to show, so only they are clickable.
             if (!hasHoliday) {
               return (
                 <div key={key} className={cellClass}>
@@ -441,7 +439,7 @@ const EthiopianCalendar = () => {
         <DialogContent className="w-[92%] max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white p-0 shadow-2xl outline-none [&>button]:hidden dark:border-slate-800 dark:bg-slate-900">
           {selectedDay && (
             <>
-              {/* Rose band — the dialog now only ever opens on a holiday. */}
+              {/* The dialog only ever opens on a holiday. */}
               <div className="relative bg-gradient-to-br from-rose-500 to-rose-600 px-5 pb-5 pt-4 text-white">
                 <DialogClose className="absolute right-3 top-3 rounded-full p-1.5 text-white/80 transition-colors hover:bg-white/20 hover:text-white">
                   <X className="h-4 w-4" aria-hidden="true" />
