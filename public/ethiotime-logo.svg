@@ -1,0 +1,25 @@
+<svg width="560" height="160" viewBox="0 0 560 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="et-bg" x1="20" y1="12" x2="124" y2="128" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0D9488"/>
+      <stop offset="0.55" stop-color="#0891B2"/>
+      <stop offset="1" stop-color="#EA580C"/>
+    </linearGradient>
+    <linearGradient id="et-accent" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="white" stop-opacity="0.95"/>
+      <stop offset="1" stop-color="white" stop-opacity="0.75"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="12" y="12" width="116" height="116" rx="28" fill="url(#et-bg)"/>
+  <circle cx="70" cy="70" r="30" stroke="url(#et-accent)" stroke-width="8"/>
+  <circle cx="70" cy="70" r="4.5" fill="white"/>
+  <path d="M70 70L70 47" stroke="white" stroke-width="7" stroke-linecap="round"/>
+  <path d="M70 70L87 78" stroke="white" stroke-width="7" stroke-linecap="round"/>
+  <path d="M42 30L52 40" stroke="white" stroke-opacity="0.8" stroke-width="5" stroke-linecap="round"/>
+
+  <g fill="#0F172A">
+    <text x="152" y="74" font-family="Avenir Next, Segoe UI, Noto Sans, Arial, sans-serif" font-size="52" font-weight="800" letter-spacing="-0.03em">EthioTime</text>
+    <text x="154" y="110" font-family="Avenir Next, Segoe UI, Noto Sans, Arial, sans-serif" font-size="19" font-weight="600" fill="#334155">Ethiopian Calendar &amp; Productivity Tools</text>
+  </g>
+</svg>

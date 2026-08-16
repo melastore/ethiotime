@@ -1,0 +1,24 @@
+{
+  "name": "EthioTime",
+  "short_name": "EthioTime",
+  "description": "Ethiopian productivity suite with date converter, planner, keyboard, and calendar tools.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4fbfa",
+  "theme_color": "#0f766e",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/ethiotime-mark.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/ethiotime-logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
