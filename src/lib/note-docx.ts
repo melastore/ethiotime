@@ -39,7 +39,7 @@ import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import type { Root, RootContent, PhrasingContent, ListItem } from "mdast";
 
-import { normalizeDisplayMath } from "@/lib/markdown-normalize";
+import { normalizeMath } from "@/lib/markdown-normalize";
 
 const MONO = "Consolas";
 const CODE_SHADING = { type: ShadingType.CLEAR, fill: "F1F5F9" } as const;
@@ -296,7 +296,7 @@ export async function noteToDocxBlob(
     .use(remarkParse)
     .use(remarkGfm)
     .use(remarkMath)
-    .parse(normalizeDisplayMath(markdown)) as Root;
+    .parse(normalizeMath(markdown)) as Root;
 
   const body: (Paragraph | Table)[] = [];
 
