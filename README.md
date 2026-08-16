@@ -39,6 +39,12 @@ npm run build
 npm run start
 ```
 
+The transliteration rules have unit tests, run with the Node test runner:
+
+```bash
+npm test
+```
+
 ## Configuration
 
 Both are optional and read at build time:
@@ -67,8 +73,8 @@ Next.js 15 (App Router), React 19, TypeScript, Tailwind CSS v4, and Radix UI pri
 
 ## Contributing
 
-Bug reports and pull requests are welcome. Please run `npm run lint` and `npm run build` before
-opening a PR.
+Bug reports and pull requests are welcome. Please run `npm run lint`, `npm test` and
+`npm run build` before opening a PR.
 
 ## License
 

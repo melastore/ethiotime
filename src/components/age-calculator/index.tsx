@@ -184,7 +184,7 @@ function DateSelector({ mode, value, onChange }: { mode: CalendarMode; value: Da
   return (
     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
       <div>
-        <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">Day</label>
+        <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Day</label>
         <select
           value={value.day}
           onChange={(e) => onChange({ day: e.target.value })}
@@ -195,7 +195,7 @@ function DateSelector({ mode, value, onChange }: { mode: CalendarMode; value: Da
         </select>
       </div>
       <div>
-        <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">Month</label>
+        <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Month</label>
         <select
           value={value.month}
           onChange={(e) => onChange({ month: e.target.value })}
@@ -206,7 +206,7 @@ function DateSelector({ mode, value, onChange }: { mode: CalendarMode; value: Da
         </select>
       </div>
       <div>
-        <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">Year</label>
+        <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Year</label>
         <select
           value={value.year}
           onChange={(e) => onChange({ year: e.target.value })}
@@ -225,7 +225,7 @@ function ResultDisplay({ age }: { age: Age | null }) {
 
   return (
     <div className="animate-in slide-in-from-bottom-5 text-center transition-all duration-500 ease-out fade-in-50">
-      <p className="mb-4 text-base font-semibold uppercase tracking-[0.14em] text-slate-500">You are</p>
+      <p className="mb-4 text-base font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">You are</p>
       <div className="flex justify-center items-end gap-4 sm:gap-8">
         <div className="rounded-2xl border border-teal-100/70 bg-white/70 px-3 py-4 text-center dark:border-teal-900/50 dark:bg-slate-900/50">
           <p className="text-5xl sm:text-7xl font-bold bg-gradient-to-br from-teal-600 to-cyan-600 bg-clip-text text-transparent tabular-nums">

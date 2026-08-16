@@ -6,9 +6,12 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
+
+import { readText, writeText } from "@/lib/storage";
 
 import {
   translate,
@@ -29,26 +32,24 @@ const LanguageContext = createContext<LanguageContextValue | null>(null);
 export function LanguageProvider({ children }: { children: ReactNode }) {
   const [language, setLanguageState] = useState<Language>("am");
 
+  const restoredRef = useRef(false);
+
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored === "en" || stored === "am") {
-        setLanguageState(stored);
-      }
-    } catch {
-      // Local storage can fail in private contexts.
+    const stored = readText(STORAGE_KEY);
+    if (stored === "en" || stored === "am") {
+      setLanguageState(stored);
     }
+    restoredRef.current = true;
   }, []);
 
   useEffect(() => {
     document.documentElement.lang = language;
     document.documentElement.setAttribute("data-lang", language);
 
-    try {
-      localStorage.setItem(STORAGE_KEY, language);
-    } catch {
-      // Ignore persistence errors.
-    }
+    // Skip the first pass so the default does not overwrite a stored choice
+    // before it has been read back.
+    if (!restoredRef.current) return;
+    writeText(STORAGE_KEY, language);
   }, [language]);
 
   const setLanguage = useCallback((next: Language) => {

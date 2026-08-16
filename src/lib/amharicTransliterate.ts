@@ -1,5 +1,3 @@
-/* eslint-disable prefer-const */
-
 type AmharicCharMap = { [key: string]: string[] };
 
 // The 7 forms of Amharic characters: Ge'ez, Ka'eb, Salis, Rabi, Hamis, Sadis, Sab'i
@@ -34,24 +32,44 @@ const amharicChars: AmharicCharMap = {
   v: ["ቨ", "ቩ", "ቪ", "ቫ", "ቬ", "ቭ", "ቮ"],
 };
 
+const GEEZ = 0;
+const HAMIS = 4;
+const SADIS = 5;
+
 // Vowels as standalone characters (using the 'a' family as carriers)
 const vowelAsChar: { [key: string]: string } = {
-  a: amharicChars["a"][0], // አ
-  e: amharicChars["a"][5], // እ
+  a: amharicChars["a"][GEEZ], // አ
+  e: amharicChars["a"][SADIS], // እ
   i: amharicChars["a"][2], // ኢ
   o: amharicChars["a"][6], // ኦ
   u: amharicChars["a"][1], // ኡ
+  E: amharicChars["a"][HAMIS], // ኤ
 };
 
-const vowels = "aeiouE";
+function standaloneVowelFor(inputKey: string): string | undefined {
+  return vowelAsChar[inputKey] ?? vowelAsChar[inputKey.toLowerCase()];
+}
+
 const vowelMap: { [key: string]: number } = {
-  e: 0, // Ge'ez (as in s'e')
+  e: GEEZ, // Ge'ez (as in s'e')
   u: 1, // Ka'eb
   i: 2, // Salis
   a: 3, // Rabi
-  E: 4, // Hamis (as in s'ie')
   o: 6, // Sab'i
 };
+
+/**
+ * Resolves a keystroke to a vowel form index. Capital `E` is kept distinct from
+ * `e` so that `sE` reaches the Hamis form (ሴ); every other vowel is case-insensitive.
+ */
+function vowelIndexFor(inputKey: string): number | undefined {
+  if (inputKey === "E") return HAMIS;
+  return vowelMap[inputKey.toLowerCase()];
+}
+
+function isVowelKey(inputKey: string): boolean {
+  return vowelIndexFor(inputKey) !== undefined;
+}
 
 const multiCharConsonants: { [key: string]: string } = {
   sh: "S",
@@ -66,31 +84,100 @@ const multiCharConsonants: { [key: string]: string } = {
   cc: "C",
 };
 
-// Labialized "consonant + w + a" forms
-const labializedAForms: { [previousChar: string]: string } = {
-  [amharicChars["k"][5]]: "ኳ", // kwa
-  [amharicChars["g"][5]]: "ጓ", // gwa
-  [amharicChars["m"][5]]: "ሟ", // mwa
-  [amharicChars["l"][5]]: "ሏ", // lwa
-  [amharicChars["s"][5]]: "ሷ", // swa
-  [amharicChars["r"][5]]: "ሯ", // rwa
-  [amharicChars["b"][5]]: "ቧ", // bwa
-  [amharicChars["t"][5]]: "ቷ", // twa
-  [amharicChars["q"][5]]: "ቋ", // qwa
-  [amharicChars["h"][5]]: "ኋ", // hwa
-  [amharicChars["H"][5]]: "ኋ", // Hwa
+/**
+ * Labialized "-wa" fidel, keyed by the family they belong to. Typing the family's
+ * base consonant followed by `w` + `a` collapses the pair into a single character
+ * (e.g. ክ + ው + a => ኳ).
+ */
+const labializedAForms: { [baseKey: string]: string } = {
+  l: "ሏ",
+  m: "ሟ",
+  r: "ሯ",
+  s: "ሷ",
+  S: "ሿ",
+  q: "ቋ",
+  b: "ቧ",
+  v: "ቯ",
+  t: "ቷ",
+  c: "ቿ",
+  h: "ኋ",
+  H: "ሗ",
+  n: "ኗ",
+  N: "ኟ",
+  k: "ኳ",
+  z: "ዟ",
+  Z: "ዧ",
+  d: "ዷ",
+  j: "ጇ",
+  g: "ጓ",
+  T: "ጧ",
+  C: "ጯ",
+  p: "ጷ",
+  P: "ጿ",
+  f: "ፏ",
 };
 
-// Create a reverse map to find the latin base for an amharic character
-const reverseCharMap: { [key: string]: string } = {};
-for (const latin in amharicChars) {
-  for (const amharic of amharicChars[latin]) {
-    // Prioritize multi-char mappings if a character is in multiple families
-    // This is a simple heuristic, a more robust system might need more rules.
-    if (!reverseCharMap[amharic] || latin.length > 1) {
-      reverseCharMap[amharic] = latin;
+type FidelPosition = { baseKey: string; formIndex: number };
+
+/**
+ * Single lookup table from any fidel to the family it belongs to and its vowel
+ * form, so resolving a character is O(1) rather than a scan of every family.
+ */
+const fidelPositions: { [char: string]: FidelPosition } = {};
+for (const baseKey in amharicChars) {
+  amharicChars[baseKey].forEach((char, formIndex) => {
+    if (!(char in fidelPositions)) {
+      fidelPositions[char] = { baseKey, formIndex };
     }
+  });
+}
+
+export type SingleCharInsertion = {
+  /** The character that was typed. */
+  char: string;
+  /** Start of the range it replaced. */
+  start: number;
+  /** End of the range it replaced; equal to `start` for a plain insertion. */
+  end: number;
+};
+
+/**
+ * Works out whether the change from `previous` to `next` was a single typed
+ * character, by matching the common prefix and suffix of the two values. Returns
+ * `null` for anything else — a deletion, a paste, or an on-screen keyboard
+ * swapping out a whole word — so those keep their native behaviour.
+ *
+ * Where the text has repeated characters the position is ambiguous (inserting
+ * "l" at either end of "ll" gives "lll"); the earliest match is used.
+ */
+export function singleCharInsertion(
+  previous: string,
+  next: string
+): SingleCharInsertion | null {
+  const maxPrefix = Math.min(previous.length, next.length);
+
+  let prefixLength = 0;
+  while (prefixLength < maxPrefix && previous[prefixLength] === next[prefixLength]) {
+    prefixLength++;
   }
+
+  let suffixLength = 0;
+  const maxSuffix = maxPrefix - prefixLength;
+  while (
+    suffixLength < maxSuffix &&
+    previous[previous.length - 1 - suffixLength] === next[next.length - 1 - suffixLength]
+  ) {
+    suffixLength++;
+  }
+
+  const inserted = next.slice(prefixLength, next.length - suffixLength);
+  if (Array.from(inserted).length !== 1) return null;
+
+  return {
+    char: inserted,
+    start: prefixLength,
+    end: previous.length - suffixLength,
+  };
 }
 
 const MODIFICATION_TIMEOUT = 3000; // ms
@@ -102,70 +189,62 @@ export const amharicTransliterate = (
   cursorEnd: number,
   timeSinceLastPress?: number
 ): { newText: string; newCursorPos: number } => {
-  let textBefore = currentText.substring(0, cursorStart);
+  const textBefore = currentText.substring(0, cursorStart);
   const textAfter = currentText.substring(cursorEnd);
 
   if (inputKey === "Backspace") {
-    if (cursorStart === cursorEnd) {
-      // No selection, delete one character before the cursor
-      if (cursorStart === 0) return { newText: currentText, newCursorPos: 0 };
-      const newText = currentText.slice(0, cursorStart - 1) + textAfter;
-      return { newText, newCursorPos: cursorStart - 1 };
-    } else {
+    if (cursorStart !== cursorEnd) {
       // Selection exists, delete the selected text
-      const newText = textBefore + textAfter;
-      return { newText, newCursorPos: cursorStart };
+      return { newText: textBefore + textAfter, newCursorPos: cursorStart };
     }
+    // No selection, delete one character before the cursor
+    if (cursorStart === 0) return { newText: currentText, newCursorPos: 0 };
+    return {
+      newText: currentText.slice(0, cursorStart - 1) + textAfter,
+      newCursorPos: cursorStart - 1,
+    };
   }
 
-  const lastAmharicChar = textBefore.slice(-1);
-  const lastLatinBase = reverseCharMap[lastAmharicChar];
+  // A long pause means the previous character is "settled": it should no longer
+  // absorb a following vowel or combine into a digraph.
+  const isContinuingWord =
+    timeSinceLastPress === undefined || timeSinceLastPress <= MODIFICATION_TIMEOUT;
 
-  // 1. Check for multi-character consonants (e.g., 's' + 'h' -> 'sh')
-  if (timeSinceLastPress && timeSinceLastPress > MODIFICATION_TIMEOUT) {
-    // Timeout exceeded, don't attempt multi-character combinations
-  } else {
-  const potentialMultiChar = (textBefore.slice(-1) + inputKey).toLowerCase();
-  if (multiCharConsonants[potentialMultiChar]) {
-    const lastCharLatinBase = reverseCharMap[textBefore.slice(-1)];
-    // This is a bit simplistic. A better approach might track the typed latin characters.
-    // For now, we assume the last amharic character corresponds to the start of the multichar.
-    // e.g., for 'sh', the last char should be from the 's' family.
-    if (lastCharLatinBase && potentialMultiChar.startsWith(lastCharLatinBase.toLowerCase())) {
-      const newBase = multiCharConsonants[potentialMultiChar];
-      const newChar = amharicChars[newBase][5]; // 6th form (Sadis)
+  const lastAmharicChar = textBefore.slice(-1);
+  const lastPosition = fidelPositions[lastAmharicChar];
+
+  // 1. Digraphs (e.g. 's' already committed as ስ, then 'h' -> ሽ).
+  if (isContinuingWord && lastPosition) {
+    const digraph = lastPosition.baseKey + inputKey.toLowerCase();
+    const digraphBase = multiCharConsonants[digraph];
+    if (digraphBase) {
       return {
-        newText: textBefore.slice(0, -1) + newChar + textAfter,
+        newText:
+          textBefore.slice(0, -1) + amharicChars[digraphBase][SADIS] + textAfter,
         newCursorPos: cursorStart,
       };
     }
-  } else if (lastLatinBase && multiCharConsonants[lastLatinBase + inputKey]) { // Keep old logic for capitals
-    const newBase = multiCharConsonants[lastLatinBase + inputKey]; 
-    const newChar = amharicChars[newBase][5]; // 6th form (Sadis)
-    return {
-      newText: textBefore.slice(0, -1) + newChar + textAfter,
-      newCursorPos: cursorStart,
-    };
-  }
   }
 
-  // 2. Check for vowel modification
-  const lowerInputKey = inputKey.toLowerCase();
-  if (lastAmharicChar && vowels.includes(lowerInputKey)) {
-    if (timeSinceLastPress && timeSinceLastPress > MODIFICATION_TIMEOUT) {
-      // Timeout exceeded, treat as a new character
-      const newChar = vowelAsChar[lowerInputKey];
+  // 2. Vowel applied to the preceding consonant.
+  if (lastAmharicChar && isVowelKey(inputKey)) {
+    const vowelIndex = vowelIndexFor(inputKey) as number;
+
+    if (!isContinuingWord) {
+      // Timeout exceeded, treat as a standalone vowel character
       return {
-        newText: textBefore + newChar + textAfter,
+        newText: textBefore + standaloneVowelFor(inputKey) + textAfter,
         newCursorPos: cursorStart + 1,
       };
     }
 
-    // Handle labialized sequence: consonant + ው + a => labialized fidel.
-    // Example: ክ + ው + a => ኳ
-    if (lastAmharicChar === amharicChars["w"][5] && lowerInputKey === "a") {
-      const previousChar = textBefore.slice(-2, -1);
-      const labializedChar = labializedAForms[previousChar];
+    // Labialized sequence: consonant + ው + a => single labialized fidel (ክ ው a => ኳ)
+    if (lastAmharicChar === amharicChars["w"][SADIS] && inputKey.toLowerCase() === "a") {
+      const precedingPosition = fidelPositions[textBefore.slice(-2, -1)];
+      const labializedChar =
+        precedingPosition && precedingPosition.formIndex === SADIS
+          ? labializedAForms[precedingPosition.baseKey]
+          : undefined;
       if (labializedChar) {
         return {
           newText: textBefore.slice(0, -2) + labializedChar + textAfter,
@@ -174,75 +253,62 @@ export const amharicTransliterate = (
       }
     }
 
-    for (let baseKey in amharicChars) {
+    if (lastPosition) {
+      const { baseKey, formIndex } = lastPosition;
       const charFamily = amharicChars[baseKey];
-      const familyIndex = charFamily.indexOf(lastAmharicChar);
-      if (familyIndex !== -1) {
-        // Base consonant (6th form) + vowel => directly pick that vowel form.
-        if (familyIndex === 5) {
-          const vowelIndex = vowelMap[lowerInputKey] ?? 5;
-          const newChar = charFamily[vowelIndex];
-          return {
-            newText: textBefore.slice(0, -1) + newChar + textAfter,
-            newCursorPos: cursorStart,
-          };
-        }
 
-        // Support both ee and ie forms for 5th form:
-        // mee/see/kee and mie/sie/kie => ሜ/ሴ/ኬ
-        if (
-          (familyIndex === 0 && lowerInputKey === "e") ||
-          (familyIndex === 2 && lowerInputKey === "e")
-        ) {
-          const newChar = charFamily[4]; // 5th form (Hamis)
-          return {
-            newText: textBefore.slice(0, -1) + newChar + textAfter,
-            newCursorPos: cursorStart,
-          };
-        }
-
-        // If the last character is already modified (not 6th form) or is a vowel-carrier,
-        // a new vowel should create a new vowel-carrier character instead of modifying.
-        // The 'a' family is at baseKey 'a'.
-        if (familyIndex !== 5 && baseKey !== 'a') {
-            const vowelIndex = vowelMap[lowerInputKey] ?? 5; // Default to 6th form 'እ'
-            const newChar = amharicChars['a'][vowelIndex];
-            return {
-                newText: textBefore + newChar + textAfter,
-                newCursorPos: cursorStart + 1,
-            };
-        }
-        const vowelIndex = vowelMap[lowerInputKey]; // Find the vowel form
-        const newChar = charFamily[vowelIndex];
+      // Bare consonant (Sadis) + vowel => that vowel's form.
+      if (formIndex === SADIS) {
         return {
-          newText: textBefore.slice(0, -1) + newChar + textAfter,
+          newText: textBefore.slice(0, -1) + charFamily[vowelIndex] + textAfter,
           newCursorPos: cursorStart,
         };
       }
+
+      // Both `ee` and `ie` reach the Hamis form: see/sie => ሴ.
+      if ((formIndex === GEEZ || formIndex === 2) && inputKey.toLowerCase() === "e") {
+        return {
+          newText: textBefore.slice(0, -1) + charFamily[HAMIS] + textAfter,
+          newCursorPos: cursorStart,
+        };
+      }
+
+      // The preceding character already carries a vowel, so start a new
+      // vowel-carrier rather than overwriting it.
+      if (baseKey !== "a") {
+        return {
+          newText: textBefore + amharicChars["a"][vowelIndex] + textAfter,
+          newCursorPos: cursorStart + 1,
+        };
+      }
+
+      return {
+        newText: textBefore.slice(0, -1) + charFamily[vowelIndex] + textAfter,
+        newCursorPos: cursorStart,
+      };
     }
   }
 
-  // 3. New consonant
-  const lowerKey = inputKey.toLowerCase();
-  if (amharicChars[lowerKey]) {
-    // Use 6th form (Sadis) for new consonants, which is at index 5
-    const newChar = amharicChars[lowerKey][5];
+  // 3. Standalone vowel. Checked before the consonant families because `a` is a
+  // family key as well as a vowel, and on its own it should read as አ, not እ.
+  const standaloneVowel = standaloneVowelFor(inputKey);
+  if (standaloneVowel) {
     return {
-      newText: textBefore + newChar + textAfter,
+      newText: textBefore + standaloneVowel + textAfter,
       newCursorPos: cursorStart + 1,
     };
   }
 
-  // Handle vowels as new characters
-  if (vowelAsChar[lowerKey]) {
-    const newChar = vowelAsChar[lowerKey];
+  // 4. New consonant, committed in its bare Sadis form.
+  const consonantFamily = amharicChars[inputKey] ?? amharicChars[inputKey.toLowerCase()];
+  if (consonantFamily) {
     return {
-      newText: textBefore + newChar + textAfter,
+      newText: textBefore + consonantFamily[SADIS] + textAfter,
       newCursorPos: cursorStart + 1,
     };
   }
 
-  // 4. Default: insert the character as is (numbers, symbols, etc.)
+  // 5. Default: insert the character as is (numbers, symbols, etc.)
   return {
     newText: textBefore + inputKey + textAfter,
     newCursorPos: cursorStart + 1,

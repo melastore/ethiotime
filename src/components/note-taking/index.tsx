@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, type MouseEvent } from "react";
+import { readJson, writeJson } from "@/lib/storage";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -73,15 +74,10 @@ const createEmptyDraft = (): NoteDraft => ({
 });
 
 const loadNotesFromStorage = (): Note[] => {
-  const savedData = localStorage.getItem(STORAGE_KEY);
-  if (!savedData) return [INITIAL_NOTE];
-
-  try {
-    const parsed = JSON.parse(savedData) as Note[];
-    return parsed.length > 0 ? parsed : [INITIAL_NOTE];
-  } catch {
-    return [INITIAL_NOTE];
-  }
+  const parsed = readJson<Note[] | null>(STORAGE_KEY, null, (value): value is Note[] =>
+    Array.isArray(value)
+  );
+  return parsed && parsed.length > 0 ? parsed : [INITIAL_NOTE];
 };
 
 // --- Main Component ---
@@ -110,7 +106,7 @@ export default function NoteTaking() {
   // 2. Saving Logic (Auto-save to LocalStorage)
   useEffect(() => {
     if (isMounted) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(notes));
+      writeJson(STORAGE_KEY, notes);
     }
   }, [notes, isMounted]);
 
@@ -258,7 +254,7 @@ export default function NoteTaking() {
             </div>
             <div className="hidden sm:block">
               <h1 className="text-lg font-bold tracking-tight">NoteSpace</h1>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
                 Organized + Fast
               </p>
             </div>
@@ -299,15 +295,15 @@ export default function NoteTaking() {
       <main className="container mx-auto px-4 py-8">
         <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
           <div className="rounded-2xl border border-slate-200/70 bg-white/75 px-3 py-2.5 dark:border-slate-700/70 dark:bg-slate-900/65">
-            <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">All Notes</div>
+            <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">All Notes</div>
             <div className="mt-1 text-xl font-black text-slate-900 dark:text-white">{notes.length}</div>
           </div>
           <div className="rounded-2xl border border-slate-200/70 bg-white/75 px-3 py-2.5 dark:border-slate-700/70 dark:bg-slate-900/65">
-            <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">Favorites</div>
+            <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Favorites</div>
             <div className="mt-1 text-xl font-black text-slate-900 dark:text-white">{favoriteCount}</div>
           </div>
           <div className="rounded-2xl border border-slate-200/70 bg-white/75 px-3 py-2.5 dark:border-slate-700/70 dark:bg-slate-900/65">
-            <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">Visible</div>
+            <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Visible</div>
             <div className="mt-1 text-xl font-black text-slate-900 dark:text-white">{filteredNotes.length}</div>
           </div>
           <div className="rounded-2xl border border-teal-100/80 bg-teal-50/70 px-3 py-2.5 dark:border-teal-900/50 dark:bg-teal-950/20">
@@ -346,10 +342,15 @@ export default function NoteTaking() {
                     size="icon"
                     className="h-8 w-8 rounded-full bg-black/5 hover:bg-black/10 dark:bg-white/10"
                     onClick={(e) => togglePin(e, note.id)}
+                    aria-pressed={note.isFavorite}
                   >
                     <Star
                       className={cn("w-4 h-4", note.isFavorite && "fill-yellow-500 text-yellow-500")}
+                      aria-hidden="true"
                     />
+                    <span className="sr-only">
+                      {note.isFavorite ? "Remove from favorites" : "Add to favorites"}
+                    </span>
                   </Button>
                 </div>
 
@@ -420,7 +421,7 @@ export default function NoteTaking() {
               className="min-h-[300px] w-full resize-none text-base leading-relaxed border-none shadow-none focus-visible:ring-0 p-6 bg-transparent placeholder:text-muted-foreground/50"
             />
             <div className="border-t border-black/5 px-6 py-4 dark:border-white/10">
-              <div className="mb-2 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">
+              <div className="mb-2 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
                 Tags
               </div>
               <div className="flex items-center gap-2">
@@ -469,7 +470,8 @@ export default function NoteTaking() {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-black/5">
-                    <Palette className="w-4 h-4 opacity-70" />
+                    <Palette className="w-4 h-4 opacity-70" aria-hidden="true" />
+                    <span className="sr-only">Choose note colour</span>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="w-48 p-2">
@@ -495,8 +497,13 @@ export default function NoteTaking() {
                 size="icon"
                 className={cn("h-8 w-8 rounded-full hover:bg-black/5", formData.isFavorite && "text-yellow-600")}
                 onClick={() => setFormData({ ...formData, isFavorite: !formData.isFavorite })}
+                aria-pressed={Boolean(formData.isFavorite)}
               >
-                <Star className={cn("w-4 h-4", formData.isFavorite && "fill-current")} />
+                <Star
+                  className={cn("w-4 h-4", formData.isFavorite && "fill-current")}
+                  aria-hidden="true"
+                />
+                <span className="sr-only">Mark as favorite</span>
               </Button>
 
               {editingNote && (
@@ -506,7 +513,8 @@ export default function NoteTaking() {
                   className="h-8 w-8 rounded-full hover:bg-red-100 text-red-600 hover:text-red-700"
                   onClick={() => handleDelete(editingNote.id)}
                 >
-                  <Trash2 className="w-4 h-4" />
+                  <Trash2 className="w-4 h-4" aria-hidden="true" />
+                  <span className="sr-only">Delete note</span>
                 </Button>
               )}
             </div>

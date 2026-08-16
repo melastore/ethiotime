@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowRightLeft,
@@ -36,6 +36,9 @@ type ConversionSuccess = {
   weekday: string;
   amharicMonth: string | null;
   extra: string | null;
+  /** The date that was entered, restated in full so the result stands on its own. */
+  sourceLabel: string;
+  sourceAmharic: string | null;
   fromLabel: "Gregorian" | "Ethiopian";
   toLabel: "Gregorian" | "Ethiopian";
   title: "Gregorian Date" | "Ethiopian Date";
@@ -50,6 +53,9 @@ type ConversionResult = ConversionSuccess | ConversionError;
 
 const GREGORIAN_YEAR_OPTIONS = getCenteredGregorianYears();
 const ETHIOPIAN_YEAR_OPTIONS = getCenteredEthiopianYears();
+
+/** Must stay in step with the `duration-300` fade on the two panels. */
+const SWAP_ANIMATION_MS = 300;
 
 interface FieldSelectProps {
   label: string;
@@ -121,9 +127,18 @@ export default function EthiopianDateConverter() {
   const [shareState, setShareState] = useState<"idle" | "copied" | "failed">(
     "idle"
   );
+  const shareTimerRef = useRef<number | null>(null);
+  const swapTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (shareTimerRef.current) window.clearTimeout(shareTimerRef.current);
+      if (swapTimerRef.current) window.clearTimeout(swapTimerRef.current);
+    };
   }, []);
 
   useEffect(() => {
@@ -212,18 +227,20 @@ export default function EthiopianDateConverter() {
       setShareState("failed");
     }
 
-    window.setTimeout(() => setShareState("idle"), 2000);
+    if (shareTimerRef.current) window.clearTimeout(shareTimerRef.current);
+    shareTimerRef.current = window.setTimeout(() => setShareState("idle"), 2000);
   }, []);
 
   const switchMode = useCallback(() => {
     setIsSwapping(true);
-    setTimeout(() => {
+    if (swapTimerRef.current) window.clearTimeout(swapTimerRef.current);
+    swapTimerRef.current = window.setTimeout(() => {
       const nextMode: CalendarMode =
         mode === "gregorian" ? "ethiopian" : "gregorian";
       setMode(nextMode);
       setInput(getTodayInputForMode(nextMode));
       setIsSwapping(false);
-    }, 300);
+    }, SWAP_ANIMATION_MS);
   }, [mode]);
 
   const validDayOptions = useMemo(() => {
@@ -265,6 +282,7 @@ export default function EthiopianDateConverter() {
 
         const converted = new Kenat(source).getEthiopian();
         const monthData = ETHIOPIAN_MONTHS[converted.month - 1];
+        const sourceMonth = GREGORIAN_MONTHS[month - 1];
 
         return {
           day: converted.day,
@@ -272,7 +290,9 @@ export default function EthiopianDateConverter() {
           year: converted.year,
           weekday: source.toLocaleDateString(undefined, { weekday: "long" }),
           amharicMonth: monthData.amharic ?? null,
-          extra: monthData.meaning ?? null,
+          extra: monthData.gregorianSpan ?? null,
+          sourceLabel: `${sourceMonth?.label ?? month} ${day}, ${year}`,
+          sourceAmharic: null,
           fromLabel: "Gregorian",
           toLabel: "Ethiopian",
           title: "Ethiopian Date",
@@ -285,6 +305,7 @@ export default function EthiopianDateConverter() {
         converted.month - 1,
         converted.day
       );
+      const sourceMonth = ETHIOPIAN_MONTHS[month - 1];
 
       return {
         day: source.getDate(),
@@ -293,6 +314,10 @@ export default function EthiopianDateConverter() {
         weekday: source.toLocaleDateString(undefined, { weekday: "long" }),
         amharicMonth: null,
         extra: null,
+        sourceLabel: `${sourceMonth?.label ?? month} ${day}, ${year} E.C.`,
+        sourceAmharic: sourceMonth?.amharic
+          ? `${sourceMonth.amharic} ${day}፣ ${year} ዓ.ም`
+          : null,
         fromLabel: "Ethiopian",
         toLabel: "Gregorian",
         title: "Gregorian Date",
@@ -302,7 +327,37 @@ export default function EthiopianDateConverter() {
     }
   }, [input.day, input.month, input.year, mode]);
 
-  if (!mounted) return null;
+  // The date itself can only be trusted once we are on the client, but the page
+  // should still deliver real markup to crawlers and paint something immediately
+  // rather than flashing an empty screen.
+  if (!mounted) {
+    return (
+      <section className="mx-auto flex w-full max-w-5xl flex-col px-2">
+        <div className="mb-3 flex-none text-center sm:mb-4">
+          <h1 className="section-title text-2xl font-black text-slate-900 sm:text-3xl lg:text-4xl dark:text-white">
+            Ethiopian Date Converter
+          </h1>
+          <p className="mx-auto mt-1 max-w-md text-xs text-slate-500 dark:text-slate-400 sm:text-sm">
+            Convert any date between the Ethiopian and Gregorian calendars.
+          </p>
+        </div>
+        <div className="rounded-2xl border border-slate-200/50 bg-white p-6 shadow-xl sm:rounded-3xl dark:border-slate-700/50 dark:bg-slate-900">
+          <div className="grid gap-6 lg:grid-cols-2">
+            <div className="space-y-3" aria-hidden="true">
+              <div className="h-12 animate-pulse rounded-xl bg-slate-100 dark:bg-slate-800" />
+              <div className="h-12 animate-pulse rounded-xl bg-slate-100 dark:bg-slate-800" />
+              <div className="h-12 animate-pulse rounded-xl bg-slate-100 dark:bg-slate-800" />
+            </div>
+            <div className="space-y-3" aria-hidden="true">
+              <div className="h-6 w-28 animate-pulse rounded bg-slate-100 dark:bg-slate-800" />
+              <div className="h-24 animate-pulse rounded-xl bg-slate-100 dark:bg-slate-800" />
+              <div className="h-6 w-40 animate-pulse rounded bg-slate-100 dark:bg-slate-800" />
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   const accent = isGregorianInput ? "teal" : "amber";
   const resultSurface = isGregorianInput
@@ -326,10 +381,10 @@ export default function EthiopianDateConverter() {
       {/* Header */}
       <div className="mb-3 flex-none text-center sm:mb-4">
         <h1 className="section-title text-2xl font-black text-slate-900 sm:text-3xl lg:text-4xl dark:text-white">
-          Convert Between Calendars
+          Ethiopian Date Converter
         </h1>
         <p className="mx-auto mt-1 max-w-md text-xs text-slate-500 sm:text-sm dark:text-slate-400">
-          Gregorian and Ethiopian calendar conversion
+          Convert any date between the Ethiopian and Gregorian calendars.
         </p>
       </div>
 
@@ -512,27 +567,47 @@ export default function EthiopianDateConverter() {
                 </div>
               ) : (
                 <div className="flex flex-col">
-                  {/* Result Header */}
-                  <div className="mb-4 flex items-center justify-between gap-2 sm:mb-6 lg:mb-8">
+                  {/* What was entered, restated in full */}
+                  <div className="mb-5 flex flex-wrap items-center gap-2 text-xs">
+                    <span className="font-semibold uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">
+                      {result.fromLabel}
+                    </span>
+                    <span className="font-bold text-slate-700 dark:text-slate-200">
+                      {result.sourceLabel}
+                    </span>
+                    {result.sourceAmharic && (
+                      <span className="text-slate-500 dark:text-slate-400">
+                        {result.sourceAmharic}
+                      </span>
+                    )}
+                    <ArrowRightLeft
+                      className={cn("h-3.5 w-3.5 shrink-0", resultToneNumber)}
+                      aria-hidden="true"
+                    />
                     <span
                       className={cn(
-                        "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em]",
+                        "rounded-full border px-2.5 py-0.5 font-bold uppercase tracking-[0.14em]",
                         resultTonePill
                       )}
                     >
-                      <Sparkles className="h-3 w-3" />
-                      {result.title}
-                    </span>
-                    <span className={cn("rounded-lg border px-2.5 py-1 text-xs font-semibold", weekdayTone)}>
-                      {result.weekday}
+                      {result.toLabel}
                     </span>
                   </div>
 
-                  {/* Big Date Display */}
-                  <div className="flex items-end gap-4 lg:gap-5">
+                  {/* The converted date */}
+                  <p
+                    className={cn(
+                      "inline-flex w-fit items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-semibold",
+                      weekdayTone
+                    )}
+                  >
+                    {result.weekday}
+                  </p>
+
+                  <div className="mt-3 flex items-end gap-4 lg:gap-5">
                     <span
                       className={cn(
-                        "text-7xl font-black leading-none tracking-tight sm:text-8xl lg:text-[9rem]",
+                        "text-7xl font-black leading-none tracking-tight sm:text-8xl lg:text-[8rem]",
                         resultToneNumber
                       )}
                     >
@@ -542,49 +617,47 @@ export default function EthiopianDateConverter() {
                       <p className="text-2xl font-black leading-tight text-slate-900 sm:text-3xl lg:text-4xl dark:text-slate-100">
                         {result.month}
                       </p>
-                      <p className="text-lg font-semibold text-slate-600 sm:text-xl lg:text-2xl dark:text-slate-400">
-                        {result.year}
-                      </p>
+                      {result.amharicMonth && (
+                        <p
+                          className={cn(
+                            "text-xl font-bold leading-tight lg:text-2xl",
+                            resultToneNumber
+                          )}
+                        >
+                          {result.amharicMonth}
+                        </p>
+                      )}
                     </div>
                   </div>
 
-                  {/* Amharic Month Info */}
+                  {/* Full single-line reading, so the answer is unambiguous */}
+                  <p className="mt-4 text-lg font-bold text-slate-900 sm:text-xl dark:text-slate-100">
+                    {result.month} {result.day}, {result.year}
+                    <span className="ml-1.5 text-sm font-semibold text-slate-500 dark:text-slate-400">
+                      {result.toLabel === "Ethiopian" ? "E.C." : "G.C."}
+                    </span>
+                  </p>
                   {result.amharicMonth && (
+                    <p className="mt-0.5 text-base font-semibold text-slate-600 dark:text-slate-300">
+                      {result.amharicMonth} {result.day}፣ {result.year} ዓ.ም
+                    </p>
+                  )}
+
+                  {result.extra && (
                     <div
                       className={cn(
-                        "mt-5 rounded-2xl border p-4 lg:mt-8",
+                        "mt-5 rounded-2xl border px-4 py-3",
                         resultToneCard
                       )}
                     >
                       <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
-                        Amharic
+                        {result.month} usually falls in
                       </p>
-                      <p
-                        className={cn(
-                          "mt-1 text-2xl font-bold tracking-tight lg:text-3xl",
-                          resultToneNumber
-                        )}
-                      >
-                        {result.amharicMonth}
+                      <p className="mt-0.5 text-sm font-bold text-slate-800 dark:text-slate-100">
+                        ≈ {result.extra}
                       </p>
-                      {result.extra && (
-                        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                          {result.extra}
-                        </p>
-                      )}
                     </div>
                   )}
-
-                  {/* Conversion Direction */}
-                  <div className="mt-4 flex items-center gap-2 text-xs lg:mt-8">
-                    <span className="rounded-lg border border-slate-200/70 bg-white/70 px-3 py-2 font-semibold text-slate-700 dark:border-slate-700/60 dark:bg-slate-900/45 dark:text-slate-200">
-                      {result.fromLabel}
-                    </span>
-                    <ArrowRightLeft className={cn("h-3.5 w-3.5 shrink-0", resultToneNumber)} />
-                    <span className={cn("rounded-lg border px-3 py-2 font-semibold", resultTonePill)}>
-                      {result.toLabel}
-                    </span>
-                  </div>
                 </div>
               )}
             </div>

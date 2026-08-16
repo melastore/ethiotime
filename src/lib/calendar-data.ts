@@ -13,7 +13,8 @@ export interface MonthOption {
   label: string;
   amharic?: string;
   short?: string;
-  meaning?: string;
+  /** Approximate Gregorian range this Ethiopian month covers. */
+  gregorianSpan?: string;
 }
 
 export interface WeekdayHeader {
@@ -22,20 +23,25 @@ export interface WeekdayHeader {
   amharic: string;
 }
 
+/**
+ * Each Ethiopian month is 30 days and lines up with the same stretch of the
+ * Gregorian year, give or take a day around leap years — so the spans below are
+ * labelled as approximate wherever they are shown.
+ */
 export const ETHIOPIAN_MONTHS: MonthOption[] = [
-  { value: "1", label: "Meskerem", amharic: "መስከረም", meaning: "New Beginning" },
-  { value: "2", label: "Tikimt", amharic: "ጥቅምት", meaning: "Harvest" },
-  { value: "3", label: "Hidar", amharic: "ኅዳር", meaning: "Harvest" },
-  { value: "4", label: "Tahsas", amharic: "ታኅሣሥ", meaning: "Harvest" },
-  { value: "5", label: "Tir", amharic: "ጥር", meaning: "Harvest" },
-  { value: "6", label: "Yekatit", amharic: "የካቲት", meaning: "Harvest" },
-  { value: "7", label: "Megabit", amharic: "መጋቢት", meaning: "Harvest" },
-  { value: "8", label: "Miyaziy", amharic: "ሚያዝያ", meaning: "Harvest" },
-  { value: "9", label: "Ginbot", amharic: "ግንቦት", meaning: "Harvest" },
-  { value: "10", label: "Sene", amharic: "ሰኔ", meaning: "Harvest" },
-  { value: "11", label: "Hamle", amharic: "ሐምሌ", meaning: "Harvest" },
-  { value: "12", label: "Nehase", amharic: "ነሐሴ", meaning: "Harvest" },
-  { value: "13", label: "Pagume", amharic: "ጳጉሜ", meaning: "The 13th Month" },
+  { value: "1", label: "Meskerem", amharic: "መስከረም", gregorianSpan: "Sep 11 – Oct 10" },
+  { value: "2", label: "Tikimt", amharic: "ጥቅምት", gregorianSpan: "Oct 11 – Nov 9" },
+  { value: "3", label: "Hidar", amharic: "ኅዳር", gregorianSpan: "Nov 10 – Dec 9" },
+  { value: "4", label: "Tahsas", amharic: "ታኅሣሥ", gregorianSpan: "Dec 10 – Jan 8" },
+  { value: "5", label: "Tir", amharic: "ጥር", gregorianSpan: "Jan 9 – Feb 7" },
+  { value: "6", label: "Yekatit", amharic: "የካቲት", gregorianSpan: "Feb 8 – Mar 9" },
+  { value: "7", label: "Megabit", amharic: "መጋቢት", gregorianSpan: "Mar 10 – Apr 8" },
+  { value: "8", label: "Miyazya", amharic: "ሚያዝያ", gregorianSpan: "Apr 9 – May 8" },
+  { value: "9", label: "Ginbot", amharic: "ግንቦት", gregorianSpan: "May 9 – Jun 7" },
+  { value: "10", label: "Sene", amharic: "ሰኔ", gregorianSpan: "Jun 8 – Jul 7" },
+  { value: "11", label: "Hamle", amharic: "ሐምሌ", gregorianSpan: "Jul 8 – Aug 6" },
+  { value: "12", label: "Nehase", amharic: "ነሐሴ", gregorianSpan: "Aug 7 – Sep 5" },
+  { value: "13", label: "Pagume", amharic: "ጳጉሜ", gregorianSpan: "Sep 6 – Sep 10" },
 ];
 
 export const GREGORIAN_MONTHS: MonthOption[] = [

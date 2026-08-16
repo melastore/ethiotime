@@ -130,9 +130,9 @@ const EthiopianCalendar = () => {
             </div>
             <p className="mt-0.5 hidden text-xs font-semibold text-slate-400 sm:block sm:text-sm dark:text-slate-500">
               {currentMonthDetails?.amharic}
-              {currentMonthDetails?.meaning && (
+              {currentMonthDetails?.gregorianSpan && (
                 <span className="ml-1.5 text-slate-300 dark:text-slate-600">
-                  &middot; {currentMonthDetails.meaning}
+                  &middot; ≈ {currentMonthDetails.gregorianSpan}
                 </span>
               )}
             </p>

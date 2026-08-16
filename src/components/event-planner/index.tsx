@@ -13,6 +13,7 @@ import {
 import Kenat from "kenat";
 
 import { DateInputFields } from "@/components/shared/date-input-fields";
+import { readJson, writeJson } from "@/lib/storage";
 import { createIcsFileContent, downloadIcsContent } from "@/lib/ics";
 import {
   getUpcomingHolidayOccurrences,
@@ -66,27 +67,19 @@ const formatReminder = (minutes: number) => {
   return `${Math.floor(minutes / 1440)} day before`;
 };
 
-const loadEvents = (): PlannerEvent[] => {
-  try {
-    const raw = localStorage.getItem(EVENTS_STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as PlannerEvent[];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-};
+/** Upper bound on remembered "already notified" keys, so the list cannot grow forever. */
+const MAX_REMEMBERED_NOTIFICATIONS = 300;
 
-const loadNotified = (): Set<string> => {
-  try {
-    const raw = localStorage.getItem(NOTIFIED_STORAGE_KEY);
-    if (!raw) return new Set<string>();
-    const parsed = JSON.parse(raw) as string[];
-    return new Set(Array.isArray(parsed) ? parsed : []);
-  } catch {
-    return new Set<string>();
-  }
-};
+const isStringArray = (value: unknown): value is string[] =>
+  Array.isArray(value) && value.every((entry) => typeof entry === "string");
+
+const loadEvents = (): PlannerEvent[] =>
+  readJson<PlannerEvent[]>(EVENTS_STORAGE_KEY, [], (value): value is PlannerEvent[] =>
+    Array.isArray(value)
+  );
+
+const loadNotified = (): Set<string> =>
+  new Set(readJson<string[]>(NOTIFIED_STORAGE_KEY, [], isStringArray));
 
 function EventCard({
   event,
@@ -158,19 +151,22 @@ export default function EventPlanner() {
   );
   const [recurrence, setRecurrence] = useState<RecurrenceRule>("none");
   const [reminderMinutes, setReminderMinutes] = useState(30);
-  const [permission, setPermission] = useState<NotificationPermission>(
-    typeof Notification === "undefined" ? "denied" : Notification.permission
-  );
+  // Read after mount, not during render: the server has no Notification API, so
+  // seeding from it directly makes the first client render disagree with the HTML.
+  const [permission, setPermission] = useState<NotificationPermission>("denied");
 
   useEffect(() => {
     setMounted(true);
     setEvents(loadEvents());
     notifiedRef.current = loadNotified();
+    if (typeof Notification !== "undefined") {
+      setPermission(Notification.permission);
+    }
   }, []);
 
   useEffect(() => {
     if (!mounted) return;
-    localStorage.setItem(EVENTS_STORAGE_KEY, JSON.stringify(events));
+    writeJson(EVENTS_STORAGE_KEY, events);
   }, [events, mounted]);
 
   const upcomingOccurrences = useMemo(() => {
@@ -216,10 +212,14 @@ export default function EventPlanner() {
     }
 
     notifiedRef.current.add(key);
-    localStorage.setItem(
-      NOTIFIED_STORAGE_KEY,
-      JSON.stringify(Array.from(notifiedRef.current))
-    );
+    // Keys are never removed as events pass, so keep only the most recent ones
+    // rather than growing this list for the lifetime of the browser profile.
+    if (notifiedRef.current.size > MAX_REMEMBERED_NOTIFICATIONS) {
+      notifiedRef.current = new Set(
+        Array.from(notifiedRef.current).slice(-MAX_REMEMBERED_NOTIFICATIONS)
+      );
+    }
+    writeJson(NOTIFIED_STORAGE_KEY, Array.from(notifiedRef.current));
 
     if (permission === "granted") {
       new Notification(titleText, {
