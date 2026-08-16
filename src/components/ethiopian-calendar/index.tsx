@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import Kenat, { MonthGrid } from "kenat";
+import Kenat, { MonthGrid, toGC } from "kenat";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 
 import {
@@ -24,8 +24,31 @@ interface CalendarDateParts {
 }
 
 interface Holiday {
+  key: string;
   name: string;
+  description?: string;
+  tags?: string[];
 }
+
+/**
+ * The calendar library returns holiday names in Amharic only, so the English
+ * interface has nothing to show. These cover every key it emits.
+ */
+const HOLIDAY_LABELS: Record<string, string> = {
+  adwa: "Adwa Victory Day",
+  beherbehereseb: "Nations and Nationalities Day",
+  eidAdha: "Eid al-Adha",
+  eidFitr: "Eid al-Fitr",
+  enkutatash: "Enkutatash — Ethiopian New Year",
+  fasika: "Fasika — Ethiopian Easter",
+  gena: "Genna — Ethiopian Christmas",
+  labour: "International Labour Day",
+  meskel: "Meskel — Finding of the True Cross",
+  moulid: "Mawlid al-Nabi",
+  patriots: "Patriots' Victory Day",
+  siklet: "Siklet — Good Friday",
+  timket: "Timket — Epiphany",
+};
 
 interface CalendarDay {
   ethiopian: CalendarDateParts;
@@ -43,6 +66,46 @@ const BLOCKED_HOLIDAY_NAMES = new Set([
 const toGregorianDate = (parts: CalendarDateParts) =>
   new Date(parts.year, parts.month - 1, parts.day);
 
+/** Pagume runs to six days in a leap year; every other month is exactly 30. */
+const daysInEthiopianMonth = (year: number, month: number) =>
+  month === 13 ? (year % 4 === 3 ? 6 : 5) : 30;
+
+/**
+ * Builds the same day grid as the calendar library, minus holidays.
+ *
+ * The library's movable-holiday maths (Fasika and Siklet, via bahire hasab)
+ * throws on one year in every nineteen — 1949, 1968, 1987, 2006, 2025 and so on
+ * — and the throw takes the whole month with it, not just the holiday. Those
+ * years are all reachable from the year dropdown, so the month is rebuilt here
+ * instead of letting the page fail.
+ */
+function buildGridWithoutHolidays(
+  year: number,
+  month: number,
+  today: CalendarDateParts
+): Array<CalendarDay | null> {
+  const firstDay = toGC(year, month, 1) as CalendarDateParts;
+  // The grid starts on Monday, while getDay() starts on Sunday.
+  const leadingBlanks = (toGregorianDate(firstDay).getDay() + 6) % 7;
+
+  const days: Array<CalendarDay | null> = Array.from(
+    { length: leadingBlanks },
+    () => null
+  );
+
+  for (let day = 1; day <= daysInEthiopianMonth(year, month); day += 1) {
+    days.push({
+      ethiopian: { year, month, day },
+      gregorian: toGC(year, month, day) as CalendarDateParts,
+      holidays: [],
+      isToday:
+        today.year === year && today.month === month && today.day === day,
+    });
+  }
+
+  return days;
+}
+
 const EthiopianCalendar = () => {
   const [currentDate, setCurrentDate] = useState(() => new Kenat());
   const [selectedDay, setSelectedDay] = useState<CalendarDay | null>(null);
@@ -52,32 +115,39 @@ const EthiopianCalendar = () => {
   const currentYear = currentEthDate.year;
   const currentMonth = currentEthDate.month;
 
-  const monthGrid = useMemo(
-    () =>
-      new MonthGrid({
+  const { monthDays, hasHolidayData } = useMemo(() => {
+    try {
+      const grid = new MonthGrid({
         year: currentYear,
         month: currentMonth,
         weekStart: 1,
         mode: "public",
-      }),
-    [currentYear, currentMonth]
-  );
+      }).generate();
 
-  const gridData = useMemo(() => monthGrid.generate(), [monthGrid]);
-  const monthDays = useMemo(
-    () =>
-      (gridData.days as Array<CalendarDay | null>).map((day) =>
-        day
-          ? {
-              ...day,
-              holidays: (day.holidays ?? []).filter(
-                (holiday) => !BLOCKED_HOLIDAY_NAMES.has(holiday.name.trim())
-              ),
-            }
-          : day
-      ),
-    [gridData.days]
-  );
+      return {
+        monthDays: (grid.days as Array<CalendarDay | null>).map((day) =>
+          day
+            ? {
+                ...day,
+                holidays: (day.holidays ?? []).filter(
+                  (holiday) => !BLOCKED_HOLIDAY_NAMES.has(holiday.name.trim())
+                ),
+              }
+            : day
+        ),
+        hasHolidayData: true,
+      };
+    } catch {
+      return {
+        monthDays: buildGridWithoutHolidays(
+          currentYear,
+          currentMonth,
+          new Kenat().getEthiopian()
+        ),
+        hasHolidayData: false,
+      };
+    }
+  }, [currentYear, currentMonth]);
 
   const currentMonthDetails = ETHIOPIAN_MONTHS.find(
     (month) => month.value === currentMonth.toString()
@@ -228,6 +298,13 @@ const EthiopianCalendar = () => {
         </div>
       )}
 
+      {!hasHolidayData && (
+        <p className="mb-2 flex-none rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+          Holiday dates could not be calculated for {currentYear}. The month is
+          shown without them.
+        </p>
+      )}
+
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
         <div className="grid flex-none grid-cols-7 border-b border-slate-200 dark:border-slate-800">
           {WEEKDAY_HEADERS.map((day) => (
@@ -265,21 +342,16 @@ const EthiopianCalendar = () => {
             const hasHoliday = day.holidays.length > 0;
             const gregorian = toGregorianDate(day.gregorian);
 
-            return (
-              <button
-                type="button"
-                key={`${day.ethiopian.year}-${day.ethiopian.month}-${day.ethiopian.day}`}
-                onClick={() => setSelectedDay(day)}
-                aria-label={`${currentMonthDetails?.label} ${day.ethiopian.day}, ${day.ethiopian.year} — ${gregorian.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}${hasHoliday ? `, ${day.holidays.map((holiday) => holiday.name).join(", ")}` : ""}`}
-                className={cn(
-                  "group relative flex flex-col items-center justify-center gap-0.5 border-b border-r border-slate-100 transition-colors dark:border-slate-800/60",
-                  "hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-teal-600 dark:hover:bg-slate-800/50",
-                  isWeekend && !isToday && "bg-slate-50/60 dark:bg-slate-950/30"
-                )}
-              >
+            const cellClass = cn(
+              "relative flex flex-col items-center justify-center gap-0.5 border-b border-r border-slate-100 dark:border-slate-800/60",
+              isWeekend && !isToday && "bg-slate-50/60 dark:bg-slate-950/30"
+            );
+
+            const content = (
+              <>
                 <span
                   className={cn(
-                    "flex h-8 w-8 items-center justify-center rounded-full text-base font-semibold tabular-nums transition-colors sm:h-9 sm:w-9 sm:text-lg",
+                    "flex h-8 w-8 items-center justify-center rounded-full text-base font-semibold tabular-nums sm:h-9 sm:w-9 sm:text-lg",
                     isToday
                       ? "bg-teal-600 text-white"
                       : hasHoliday
@@ -303,6 +375,38 @@ const EthiopianCalendar = () => {
                     hasHoliday ? "bg-rose-500" : "bg-transparent"
                   )}
                 />
+              </>
+            );
+
+            const key = `${day.ethiopian.year}-${day.ethiopian.month}-${day.ethiopian.day}`;
+
+            // Only holidays have anything to show, so only they are clickable —
+            // an ordinary day opening an empty dialog was just a dead end.
+            if (!hasHoliday) {
+              return (
+                <div key={key} className={cellClass}>
+                  {content}
+                </div>
+              );
+            }
+
+            return (
+              <button
+                type="button"
+                key={key}
+                onClick={() => setSelectedDay(day)}
+                aria-label={`${day.holidays
+                  .map((holiday) => HOLIDAY_LABELS[holiday.key] ?? holiday.name)
+                  .join(", ")} — ${currentMonthDetails?.label} ${day.ethiopian.day}, ${day.ethiopian.year} (${gregorian.toLocaleDateString(
+                  "en-US",
+                  { month: "long", day: "numeric", year: "numeric" }
+                )})`}
+                className={cn(
+                  cellClass,
+                  "cursor-pointer transition-colors hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-rose-500 dark:hover:bg-rose-950/30"
+                )}
+              >
+                {content}
               </button>
             );
           })}
@@ -317,6 +421,9 @@ const EthiopianCalendar = () => {
         <span className="flex items-center gap-1.5">
           <span className="h-2 w-2 rounded-full bg-rose-500" aria-hidden="true" />
           Holiday
+          <span className="hidden text-slate-400 sm:inline dark:text-slate-500">
+            — tap for details
+          </span>
         </span>
         <span className="flex items-center gap-1.5">
           <span
@@ -331,84 +438,85 @@ const EthiopianCalendar = () => {
         open={selectedDay !== null}
         onOpenChange={(open) => !open && setSelectedDay(null)}
       >
-        <DialogContent className="w-[92%] max-w-sm overflow-hidden rounded-2xl border border-slate-200 bg-white p-0 outline-none [&>button]:hidden dark:border-slate-800 dark:bg-slate-900">
+        <DialogContent className="w-[92%] max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white p-0 shadow-2xl outline-none [&>button]:hidden dark:border-slate-800 dark:bg-slate-900">
           {selectedDay && (
             <>
-              <DialogTitle className="sr-only">
-                {ETHIOPIAN_MONTHS[selectedDay.ethiopian.month - 1].label}{" "}
-                {selectedDay.ethiopian.day}, {selectedDay.ethiopian.year}
-              </DialogTitle>
-
-              <div className="flex items-center gap-4 border-b border-slate-100 p-4 dark:border-slate-800">
-                <div
-                  className={cn(
-                    "flex h-14 w-14 flex-none items-center justify-center rounded-xl text-3xl font-bold tabular-nums text-white",
-                    selectedDay.holidays.length > 0 ? "bg-rose-500" : "bg-teal-600"
-                  )}
-                >
-                  {selectedDay.ethiopian.day}
-                </div>
-
-                <div className="min-w-0 flex-1">
-                  <p className="text-lg font-semibold leading-tight text-slate-900 dark:text-white">
-                    {ETHIOPIAN_MONTHS[selectedDay.ethiopian.month - 1].label}{" "}
-                    {selectedDay.ethiopian.year}
-                  </p>
-                  <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
-                    {ETHIOPIAN_MONTHS[selectedDay.ethiopian.month - 1].amharic} ·{" "}
-                    {toGregorianDate(selectedDay.gregorian).toLocaleDateString(
-                      "en-US",
-                      { weekday: "long" }
-                    )}
-                  </p>
-                </div>
-
-                <DialogClose className="flex-none rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-slate-800 dark:hover:text-slate-100">
+              {/* Rose band — the dialog now only ever opens on a holiday. */}
+              <div className="relative bg-gradient-to-br from-rose-500 to-rose-600 px-5 pb-5 pt-4 text-white">
+                <DialogClose className="absolute right-3 top-3 rounded-full p-1.5 text-white/80 transition-colors hover:bg-white/20 hover:text-white">
                   <X className="h-4 w-4" aria-hidden="true" />
                   <span className="sr-only">Close</span>
                 </DialogClose>
-              </div>
 
-              <div className="space-y-3 p-4">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
-                    Gregorian
-                  </p>
-                  <p className="mt-1 text-sm font-medium text-slate-900 dark:text-white">
-                    {toGregorianDate(selectedDay.gregorian).toLocaleDateString(
-                      "en-US",
-                      {
-                        weekday: "long",
-                        month: "long",
-                        day: "numeric",
-                        year: "numeric",
-                      }
-                    )}
-                  </p>
-                </div>
-
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
-                    Holidays
-                  </p>
-                  {selectedDay.holidays.length > 0 ? (
-                    <ul className="mt-1.5 space-y-1.5">
-                      {selectedDay.holidays.map((holiday) => (
-                        <li
-                          key={holiday.name}
-                          className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-800 dark:border-rose-900/50 dark:bg-rose-950/30 dark:text-rose-200"
-                        >
-                          {holiday.name}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                      No public holiday on this date.
-                    </p>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/70">
+                  {toGregorianDate(selectedDay.gregorian).toLocaleDateString(
+                    "en-US",
+                    { weekday: "long" }
                   )}
+                </p>
+
+                <div className="mt-1.5 flex items-baseline gap-2">
+                  <span className="text-5xl font-bold leading-none tabular-nums">
+                    {selectedDay.ethiopian.day}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="truncate text-lg font-semibold leading-tight">
+                      {ETHIOPIAN_MONTHS[selectedDay.ethiopian.month - 1].label}{" "}
+                      {selectedDay.ethiopian.year}
+                    </p>
+                    <p className="truncate text-sm text-white/75">
+                      {ETHIOPIAN_MONTHS[selectedDay.ethiopian.month - 1].amharic}
+                    </p>
+                  </div>
                 </div>
+
+                <p className="mt-3 border-t border-white/20 pt-2.5 text-sm text-white/85">
+                  {toGregorianDate(selectedDay.gregorian).toLocaleDateString(
+                    "en-US",
+                    { month: "long", day: "numeric", year: "numeric" }
+                  )}
+                </p>
               </div>
+
+              <DialogTitle className="sr-only">
+                {selectedDay.holidays
+                  .map((holiday) => HOLIDAY_LABELS[holiday.key] ?? holiday.name)
+                  .join(", ")}
+              </DialogTitle>
+
+              <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+                {selectedDay.holidays.map((holiday) => (
+                  <li key={holiday.key} className="px-5 py-4">
+                    <p className="font-semibold leading-snug text-slate-900 dark:text-white">
+                      {HOLIDAY_LABELS[holiday.key] ?? holiday.name}
+                    </p>
+                    {HOLIDAY_LABELS[holiday.key] && (
+                      <p className="mt-0.5 text-sm text-rose-600 dark:text-rose-400">
+                        {holiday.name}
+                      </p>
+                    )}
+
+                    {holiday.description && (
+                      <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+                        {holiday.description}
+                      </p>
+                    )}
+
+                    {holiday.tags && holiday.tags.length > 0 && (
+                      <div className="mt-2.5 flex flex-wrap gap-1.5">
+                        {holiday.tags.map((tag) => (
+                          <span
+                            key={tag}
+                            className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-medium capitalize text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
             </>
           )}
         </DialogContent>
