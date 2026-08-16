@@ -1,10 +1,45 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef } from "react";
-import { NotebookPen, Search, Star, Trash2, X } from "lucide-react";
+import {
+  Code2,
+  Download,
+  FileText,
+  NotebookPen,
+  Printer,
+  Search,
+  Sigma,
+  Star,
+  Table2,
+  Trash2,
+  X,
+} from "lucide-react";
+
+import dynamic from "next/dynamic";
 
 import { readJson, writeJson } from "@/lib/storage";
 import { cn } from "@/lib/utils";
+
+/**
+ * The renderer carries the TeX typesetter and the syntax highlighter, which
+ * together outweigh everything else on the page. Notes are read from this
+ * device after mount anyway, so nothing is lost by fetching it separately.
+ */
+const MarkdownView = dynamic(
+  () =>
+    import("@/components/note-taking/markdown-view").then(
+      (module) => module.MarkdownView
+    ),
+  {
+    ssr: false,
+    loading: () => (
+      <div
+        className="h-14 animate-pulse rounded-lg bg-slate-100 dark:bg-slate-800"
+        aria-hidden="true"
+      />
+    ),
+  }
+);
 
 /**
  * The stored shape is kept as-is so notes written by earlier versions keep
@@ -24,8 +59,35 @@ const STORAGE_KEY = "modern-notes-data";
 
 type NotesTab = "all" | "favorites";
 
-/** Long notes are cut to roughly five lines until the reader asks for more. */
-const COLLAPSED_HEIGHT = "max-h-[7.5rem]";
+/** Long notes are cut short until the reader asks for more. */
+const COLLAPSED_HEIGHT = "max-h-[11rem]";
+
+const slugify = (value: string) =>
+  value
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60) || "note";
+
+/** A note has no title field any more, so the first meaningful line names it. */
+function noteHeading(note: Note): string {
+  if (note.title.trim()) return note.title.trim();
+
+  const firstLine = note.content.split("\n").find((line) => line.trim());
+  return firstLine?.replace(/^#+\s*/, "").trim().slice(0, 80) || "Note";
+}
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  // Revoked late: Firefox cancels the download if the URL dies too soon.
+  window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
 
 const loadNotesFromStorage = (): Note[] =>
   readJson<Note[]>(STORAGE_KEY, [], (value): value is Note[] =>
@@ -77,10 +139,15 @@ function NoteBody({ content, title }: { content: string; title: string }) {
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(element);
-    return () => observer.disconnect();
-  }, [content, isExpanded]);
+    // Formulas and highlighted code settle a frame after the markup lands, and
+    // the note is taller once they do.
+    const settle = window.setTimeout(measure, 250);
 
-  const segments = content.split(/(#[\p{L}\p{N}_-]+)/gu);
+    return () => {
+      observer.disconnect();
+      window.clearTimeout(settle);
+    };
+  }, [content, isExpanded]);
 
   return (
     <div>
@@ -96,20 +163,7 @@ function NoteBody({ content, title }: { content: string; title: string }) {
             {title}
           </p>
         )}
-        <p className="whitespace-pre-wrap break-words text-[15px] leading-relaxed text-slate-700 dark:text-slate-300">
-          {segments.map((segment, index) =>
-            segment.startsWith("#") && segment.length > 1 ? (
-              <span
-                key={index}
-                className="font-medium text-teal-600 dark:text-teal-400"
-              >
-                {segment}
-              </span>
-            ) : (
-              segment
-            )
-          )}
-        </p>
+        <MarkdownView content={content} />
 
         {/* Fades the cut line so it reads as truncated, not as a hard crop. */}
         {!isExpanded && isOverflowing && (
@@ -144,7 +198,25 @@ export default function NoteTaking() {
   const [activeTab, setActiveTab] = useState<NotesTab>("all");
   const [activeTag, setActiveTag] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  const [isPreview, setIsPreview] = useState(false);
+  const [printNote, setPrintNote] = useState<Note | null>(null);
+  const [exportingId, setExportingId] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
+
+  // PDF goes through the browser's print pipeline, which keeps formulas as
+  // selectable vector text instead of a screenshot. The note is mounted into a
+  // print-only region first, then handed over once it has typeset.
+  useEffect(() => {
+    if (!printNote) return;
+
+    const timer = window.setTimeout(() => {
+      window.print();
+      setPrintNote(null);
+    }, 400);
+
+    return () => window.clearTimeout(timer);
+  }, [printNote]);
 
   useEffect(() => {
     setNotes(loadNotesFromStorage());
@@ -195,10 +267,61 @@ export default function NoteTaking() {
       });
   }, [notes, searchQuery, activeTab, activeTag]);
 
-  const isComposerOpen = isComposerFocused || draft.length > 0;
+  const isComposerOpen = isComposerFocused || draft.length > 0 || isPreview;
   // The wide two-column layout only earns its place once there is a feed and a
   // filter rail to put in it.
   const hasNotes = isMounted && notes.length > 0;
+
+  const exportMarkdown = (note: Note) => {
+    downloadBlob(
+      new Blob([note.content], { type: "text/markdown;charset=utf-8" }),
+      `${slugify(noteHeading(note))}.md`
+    );
+  };
+
+  const exportDocx = async (note: Note) => {
+    setExportingId(note.id);
+    setExportError(null);
+
+    try {
+      // Loaded on demand: the writer and the TeX typesetter together are far
+      // larger than the rest of this page.
+      const { noteToDocxBlob } = await import("@/lib/note-docx");
+      const blob = await noteToDocxBlob(noteHeading(note), note.content);
+      downloadBlob(blob, `${slugify(noteHeading(note))}.docx`);
+    } catch {
+      setExportError("Could not build the Word file for that note.");
+    } finally {
+      setExportingId(null);
+    }
+  };
+
+  /** Wraps the selection, or drops in a placeholder when nothing is selected. */
+  const insertSnippet = (before: string, after: string, placeholder: string) => {
+    const element = composerRef.current;
+    if (!element) return;
+
+    const { selectionStart, selectionEnd } = element;
+    const selected = draft.slice(selectionStart, selectionEnd) || placeholder;
+
+    setDraft(
+      draft.slice(0, selectionStart) +
+        before +
+        selected +
+        after +
+        draft.slice(selectionEnd)
+    );
+
+    // The textarea has not re-rendered with the new value yet, so the selection
+    // has to be restored once it has.
+    requestAnimationFrame(() => {
+      element.focus();
+      element.setSelectionRange(
+        selectionStart + before.length,
+        selectionStart + before.length + selected.length
+      );
+    });
+  };
 
   const saveDraft = () => {
     const content = draft.trim();
@@ -231,11 +354,13 @@ export default function NoteTaking() {
     }
 
     setDraft("");
+    setIsPreview(false);
   };
 
   const startEditing = (note: Note) => {
     setEditingId(note.id);
     setDraft(note.content);
+    setIsPreview(false);
     composerRef.current?.focus();
     composerRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
   };
@@ -243,6 +368,7 @@ export default function NoteTaking() {
   const cancelEditing = () => {
     setEditingId(null);
     setDraft("");
+    setIsPreview(false);
   };
 
   const toggleFavorite = (id: string) => {
@@ -285,7 +411,8 @@ export default function NoteTaking() {
               Notes
             </h1>
             <p className="mt-1.5 text-sm text-slate-600 dark:text-slate-400">
-              Saved on this device. Add #tags anywhere in the text.
+              Markdown, LaTeX and code, saved on this device. Export to Word or
+              PDF.
             </p>
           </div>
           {isMounted && notes.length > 0 && (
@@ -306,21 +433,83 @@ export default function NoteTaking() {
                 : "border-slate-200 dark:border-slate-800"
           )}
         >
-          <textarea
-            ref={composerRef}
-            rows={1}
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            onFocus={() => setIsComposerFocused(true)}
-            onBlur={() => setIsComposerFocused(false)}
-            onKeyDown={handleComposerKeyDown}
-            placeholder="Write a note…"
-            aria-label={editingId ? "Edit note" : "Write a new note"}
-            className="scrollbar-slim block max-h-80 min-h-[3rem] w-full resize-none overflow-y-auto bg-transparent px-4 py-3.5 text-[15px] leading-relaxed text-slate-900 outline-none placeholder:text-slate-400 dark:text-slate-100"
-          />
+          {isPreview ? (
+            <div className="min-h-[6rem] px-4 py-3.5">
+              {draft.trim() ? (
+                <MarkdownView content={draft} />
+              ) : (
+                <p className="text-sm text-slate-400">Nothing to preview yet.</p>
+              )}
+            </div>
+          ) : (
+            <textarea
+              ref={composerRef}
+              rows={1}
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              onFocus={() => setIsComposerFocused(true)}
+              onBlur={() => setIsComposerFocused(false)}
+              onKeyDown={handleComposerKeyDown}
+              placeholder="Write a note…  **bold**, $E=mc^2$, ```python"
+              aria-label={editingId ? "Edit note" : "Write a new note"}
+              className="scrollbar-slim block max-h-80 min-h-[3rem] w-full resize-none overflow-y-auto bg-transparent px-4 py-3.5 font-mono text-[14px] leading-relaxed text-slate-900 outline-none placeholder:font-sans placeholder:text-slate-400 dark:text-slate-100"
+            />
+          )}
+
           {isComposerOpen && (
-            <div className="flex items-center justify-between gap-3 border-t border-slate-100 px-3 py-2 dark:border-slate-800">
-              <span className="pl-1 text-xs text-slate-400 dark:text-slate-500">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 px-3 py-2 dark:border-slate-800">
+              <div className="flex items-center gap-0.5">
+                {[
+                  {
+                    icon: Sigma,
+                    label: "Inline formula",
+                    args: ["$", "$", "E = mc^2"] as const,
+                  },
+                  {
+                    icon: FileText,
+                    label: "Display formula",
+                    args: ["\n$$\n", "\n$$\n", "\\int_0^1 x\\,dx"] as const,
+                  },
+                  {
+                    icon: Code2,
+                    label: "Code block",
+                    args: ["\n```python\n", "\n```\n", "print(1)"] as const,
+                  },
+                  {
+                    icon: Table2,
+                    label: "Table",
+                    args: ["\n| ", " |  |\n| --- | --- |\n|  |  |\n", "a"] as const,
+                  },
+                ].map(({ icon: Icon, label, args }) => (
+                  <button
+                    key={label}
+                    type="button"
+                    title={label}
+                    disabled={isPreview}
+                    onClick={() => insertSnippet(args[0], args[1], args[2])}
+                    className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-900 disabled:opacity-30 dark:hover:bg-slate-800 dark:hover:text-slate-100"
+                  >
+                    <Icon className="h-4 w-4" aria-hidden="true" />
+                    <span className="sr-only">{label}</span>
+                  </button>
+                ))}
+
+                <button
+                  type="button"
+                  onClick={() => setIsPreview((value) => !value)}
+                  aria-pressed={isPreview}
+                  className={cn(
+                    "ml-1 rounded-md px-2 py-1 text-xs font-medium transition-colors",
+                    isPreview
+                      ? "bg-teal-600 text-white"
+                      : "text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
+                  )}
+                >
+                  Preview
+                </button>
+              </div>
+
+              <span className="ml-auto hidden pl-1 text-xs text-slate-400 sm:inline dark:text-slate-500">
                 {editingId ? "Editing · Esc to cancel" : "Ctrl + Enter to save"}
               </span>
               <div className="flex items-center gap-1.5">
@@ -469,6 +658,40 @@ export default function NoteTaking() {
                     <div className="-mr-1.5 flex items-center gap-0.5">
                       <button
                         type="button"
+                        title="Export as Word (.docx)"
+                        disabled={exportingId === note.id}
+                        onClick={() => exportDocx(note)}
+                        className="rounded-md p-1.5 text-slate-300 transition-colors hover:bg-slate-100 hover:text-blue-600 disabled:animate-pulse dark:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-blue-400"
+                      >
+                        <Download className="h-4 w-4" aria-hidden="true" />
+                        <span className="sr-only">Export as Word</span>
+                      </button>
+                      <button
+                        type="button"
+                        title="Export as PDF"
+                        onClick={() => setPrintNote(note)}
+                        className="rounded-md p-1.5 text-slate-300 transition-colors hover:bg-slate-100 hover:text-rose-600 dark:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-rose-400"
+                      >
+                        <Printer className="h-4 w-4" aria-hidden="true" />
+                        <span className="sr-only">Export as PDF</span>
+                      </button>
+                      <button
+                        type="button"
+                        title="Download Markdown (.md)"
+                        onClick={() => exportMarkdown(note)}
+                        className="rounded-md p-1.5 text-slate-300 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-100"
+                      >
+                        <FileText className="h-4 w-4" aria-hidden="true" />
+                        <span className="sr-only">Download Markdown</span>
+                      </button>
+
+                      <span
+                        className="mx-0.5 h-4 w-px bg-slate-200 dark:bg-slate-700"
+                        aria-hidden="true"
+                      />
+
+                      <button
+                        type="button"
                         onClick={() => toggleFavorite(note.id)}
                         aria-pressed={note.isFavorite}
                         className="rounded-md p-1.5 text-slate-300 transition-colors hover:bg-slate-100 hover:text-amber-500 dark:text-slate-600 dark:hover:bg-slate-800"
@@ -511,6 +734,24 @@ export default function NoteTaking() {
           )}
         </div>
       </div>
+
+      {exportError && (
+        <p
+          role="alert"
+          className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:border-rose-900/50 dark:bg-rose-950/30 dark:text-rose-300"
+        >
+          {exportError}
+        </p>
+      )}
+
+      {/* Mounted only while a PDF is being produced, and shown only to the
+          printer — the stylesheet hides everything else on the page. */}
+      {printNote && (
+        <div id="note-print-root" className="hidden print:block">
+          <h1 className="mb-4 text-2xl font-bold">{noteHeading(printNote)}</h1>
+          <MarkdownView content={printNote.content} />
+        </div>
+      )}
     </section>
   );
 }
