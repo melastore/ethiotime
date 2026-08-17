@@ -2,7 +2,7 @@ import {
   CalendarRange,
   CalendarSync,
   Keyboard,
-  Landmark,
+  PartyPopper,
   ListChecks,
   Timer,
   NotebookPen,
@@ -102,13 +102,13 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   },
   {
     href: "/holidays",
-    title: "Holiday Guide",
+    title: "Beal",
     description:
-      "Explore Ethiopian public holidays with yearly dates and context.",
-    navDescription: "History and dates",
+      "Every Ethiopian feast day of the year, in both calendars, with the story behind it.",
+    navDescription: "Feast days and stories",
     titleKey: "nav.holidays",
     descriptionKey: "nav.historyAndDates",
-    icon: Landmark,
-    tone: "from-amber-500 to-orange-500",
+    icon: PartyPopper,
+    tone: "from-amber-500 to-rose-500",
   },
 ];

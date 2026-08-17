@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
 
-import HolidayGuide from "@/components/holiday-guide";
+import Beal from "@/components/holiday-guide";
 
 export const metadata: Metadata = {
-  title: "Holiday Guide",
+  title: "Beal — Ethiopian Holidays",
   description:
-    "Ethiopian public holiday details, dual-calendar dates, and history/context.",
+    "Every Ethiopian feast day of the year: Ethiopian calendar dates with the Gregorian date alongside, and the history behind each holiday.",
 };
 
-export default function HolidayGuidePage() {
-  return <HolidayGuide />;
+export default function BealPage() {
+  return <Beal />;
 }

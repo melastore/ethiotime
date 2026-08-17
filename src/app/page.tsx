@@ -33,7 +33,7 @@ export default function Home() {
       },
       {
         "@type": "WebApplication",
-        name: "Holiday Guide",
+        name: "Beal",
         url: `${siteUrl}/holidays`,
         applicationCategory: "ReferenceApplication",
       },

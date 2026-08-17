@@ -4,11 +4,15 @@ import { ETHIOPIAN_MONTHS } from "@/lib/calendar-data";
 
 export type HolidayCalendarType = "ethiopian" | "gregorian" | "islamic";
 
+/** Who keeps the day: the state, a church, a mosque, or a community. */
+export type HolidayTradition = "national" | "christian" | "muslim" | "cultural";
+
 export type EthiopianHoliday = {
   id: string;
   name: string;
   amharic: string;
   calendar: HolidayCalendarType;
+  tradition: HolidayTradition;
   month: number;
   day: number;
   description: string;
@@ -77,6 +81,7 @@ export const ETHIOPIAN_PUBLIC_HOLIDAYS: EthiopianHoliday[] = [
     name: "Enkutatash",
     amharic: "እንቁጣጣሽ",
     calendar: "ethiopian",
+    tradition: "cultural",
     month: 1,
     day: 1,
     description: "Ethiopian New Year celebration.",
@@ -88,6 +93,7 @@ export const ETHIOPIAN_PUBLIC_HOLIDAYS: EthiopianHoliday[] = [
     name: "Meskel",
     amharic: "መስቀል",
     calendar: "ethiopian",
+    tradition: "christian",
     month: 1,
     day: 17,
     description: "Finding of the True Cross festival.",
@@ -99,6 +105,7 @@ export const ETHIOPIAN_PUBLIC_HOLIDAYS: EthiopianHoliday[] = [
     name: "Genna",
     amharic: "ገና",
     calendar: "ethiopian",
+    tradition: "christian",
     month: 4,
     day: 29,
     description: "Ethiopian Christmas.",
@@ -110,6 +117,7 @@ export const ETHIOPIAN_PUBLIC_HOLIDAYS: EthiopianHoliday[] = [
     name: "Timket",
     amharic: "ጥምቀት",
     calendar: "ethiopian",
+    tradition: "christian",
     month: 5,
     day: 11,
     description: "Epiphany celebration and blessing of water.",
@@ -121,6 +129,7 @@ export const ETHIOPIAN_PUBLIC_HOLIDAYS: EthiopianHoliday[] = [
     name: "Adwa Victory Day",
     amharic: "የአድዋ ድል በዓል",
     calendar: "ethiopian",
+    tradition: "national",
     month: 6,
     day: 23,
     description: "Commemoration of the Battle of Adwa victory.",
@@ -132,6 +141,7 @@ export const ETHIOPIAN_PUBLIC_HOLIDAYS: EthiopianHoliday[] = [
     name: "Patriots' Victory Day",
     amharic: "የአርበኞች ቀን",
     calendar: "ethiopian",
+    tradition: "national",
     month: 8,
     day: 27,
     description: "Victory over fascist occupation in 1941.",
@@ -143,6 +153,7 @@ export const ETHIOPIAN_PUBLIC_HOLIDAYS: EthiopianHoliday[] = [
     name: "International Labour Day",
     amharic: "የሰራተኞች ቀን",
     calendar: "gregorian",
+    tradition: "national",
     month: 5,
     day: 1,
     description: "Global labor rights and workers day.",
@@ -154,6 +165,7 @@ export const ETHIOPIAN_PUBLIC_HOLIDAYS: EthiopianHoliday[] = [
     name: "Irreecha",
     amharic: "ኢሬቻ",
     calendar: "gregorian",
+    tradition: "cultural",
     month: 10,
     day: 6,
     description: "Thanksgiving festival celebrated by Oromo communities.",
@@ -165,6 +177,7 @@ export const ETHIOPIAN_PUBLIC_HOLIDAYS: EthiopianHoliday[] = [
     name: "Eid al-Fitr",
     amharic: "ኢድ አልፊጥር",
     calendar: "islamic",
+    tradition: "muslim",
     month: 10,
     day: 1,
     description: "Festival marking the end of Ramadan fasting.",
@@ -176,6 +189,7 @@ export const ETHIOPIAN_PUBLIC_HOLIDAYS: EthiopianHoliday[] = [
     name: "Eid al-Adha",
     amharic: "ኢድ አልአድሃ",
     calendar: "islamic",
+    tradition: "muslim",
     month: 12,
     day: 10,
     description: "Festival of Sacrifice during Hajj season.",
@@ -187,6 +201,7 @@ export const ETHIOPIAN_PUBLIC_HOLIDAYS: EthiopianHoliday[] = [
     name: "Mawlid al-Nabi",
     amharic: "መውሊድ አል-ነቢ",
     calendar: "islamic",
+    tradition: "muslim",
     month: 3,
     day: 12,
     description: "Commemoration of the birth of Prophet Muhammad.",
@@ -309,6 +324,46 @@ export function getHolidayOccurrencesForYear(
   return ETHIOPIAN_PUBLIC_HOLIDAYS.map((holiday) =>
     resolveHolidayOccurrence(holiday, gregorianYear)
   ).sort((a, b) => a.gregorianDate.getTime() - b.gregorianDate.getTime());
+}
+
+/**
+ * The Gregorian years an Ethiopian year runs across: it opens on Meskerem 1 in
+ * September of `ethiopianYear + 7` and closes at the end of Pagume in September
+ * of the year after that.
+ */
+export function gregorianYearsOfEthiopianYear(ethiopianYear: number) {
+  return [ethiopianYear + 7, ethiopianYear + 8] as const;
+}
+
+/**
+ * The holidays of one Ethiopian year, Meskerem through Pagume.
+ *
+ * Each holiday is resolved against both Gregorian years the Ethiopian year
+ * straddles and then kept only if it really lands inside it. An Islamic holiday
+ * can fall twice in the same Ethiopian year — the lunar year is eleven days
+ * shorter — so occurrences are keyed by date rather than by holiday.
+ */
+export function getHolidayOccurrencesForEthiopianYear(
+  ethiopianYear: number
+): HolidayOccurrence[] {
+  const seen = new Set<string>();
+  const occurrences: HolidayOccurrence[] = [];
+
+  for (const gregorianYear of gregorianYearsOfEthiopianYear(ethiopianYear)) {
+    for (const occurrence of getHolidayOccurrencesForYear(gregorianYear)) {
+      if (occurrence.ethiopian.year !== ethiopianYear) continue;
+
+      const key = `${occurrence.holiday.id}:${occurrence.gregorianDate.toDateString()}`;
+      if (seen.has(key)) continue;
+
+      seen.add(key);
+      occurrences.push(occurrence);
+    }
+  }
+
+  return occurrences.sort(
+    (a, b) => a.gregorianDate.getTime() - b.gregorianDate.getTime()
+  );
 }
 
 export function getUpcomingHolidayOccurrences(

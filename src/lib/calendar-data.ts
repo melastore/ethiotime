@@ -75,7 +75,7 @@ export const DAY_OPTIONS = Array.from({ length: 31 }, (_, i) =>
 
 const getCurrentGregorianYear = () => new Date().getFullYear();
 
-const getCurrentEthiopianYear = () => new Kenat().getEthiopian().year;
+export const getCurrentEthiopianYear = () => new Kenat().getEthiopian().year;
 
 export const getCenteredGregorianYears = (
   yearsBefore = 75,
