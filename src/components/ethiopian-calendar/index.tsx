@@ -26,33 +26,12 @@ interface CalendarDateParts {
 
 interface Holiday {
   key: string;
+  /** English name, with the Amharic one alongside it. */
   name: string;
+  amharic: string;
   description?: string;
   tags?: string[];
 }
-
-/**
- * The calendar library returns holiday names in Amharic only, so the English
- * interface has nothing to show. These cover every key it emits.
- */
-const HOLIDAY_LABELS: Record<string, string> = {
-  "eid-al-adha": "Eid al-Adha",
-  "eid-al-fitr": "Eid al-Fitr",
-  mawlid: "Mawlid al-Nabi",
-  adwa: "Adwa Victory Day",
-  beherbehereseb: "Nations and Nationalities Day",
-  eidAdha: "Eid al-Adha",
-  eidFitr: "Eid al-Fitr",
-  enkutatash: "Enkutatash — Ethiopian New Year",
-  fasika: "Fasika — Ethiopian Easter",
-  gena: "Genna — Ethiopian Christmas",
-  labour: "International Labour Day",
-  meskel: "Meskel — Finding of the True Cross",
-  moulid: "Mawlid al-Nabi",
-  patriots: "Patriots' Victory Day",
-  siklet: "Siklet — Good Friday",
-  timket: "Timket — Epiphany",
-};
 
 interface CalendarDay {
   ethiopian: CalendarDateParts;
@@ -60,22 +39,6 @@ interface CalendarDay {
   holidays: Holiday[];
   isToday: boolean;
 }
-
-const BLOCKED_HOLIDAY_NAMES = new Set([
-  "የደርግ ውድቀት ቀን",
-  "Derg Downfall Day",
-  "የሰማዕታት ቀን",
-]);
-
-/**
- * The library's own keys for the Islamic feasts, which are dropped in favour of
- * the app's dates for them.
- *
- * The library puts Eid al-Adha on 9 Dhu al-Hijjah and Mawlid on 11 Rabi
- * al-Awwal — a day early in both cases — so the calendar and the holiday guide
- * showed different dates for the same feast. Both now read from `src/lib`.
- */
-const LIBRARY_ISLAMIC_KEYS = new Set(["eidAdha", "eidFitr", "moulid"]);
 
 const toGregorianDate = (parts: CalendarDateParts) =>
   new Date(parts.year, parts.month - 1, parts.day);
@@ -129,20 +92,27 @@ const EthiopianCalendar = () => {
   const currentYear = currentEthDate.year;
   const currentMonth = currentEthDate.month;
 
-  /** The app's own Islamic feasts for this month, keyed by Ethiopian day. */
-  const islamicHolidays = useMemo(() => {
+  /**
+   * The month's feasts, keyed by Ethiopian day.
+   *
+   * They come from `src/lib` rather than from the calendar library, which put
+   * Eid al-Adha on 9 Dhu al-Hijjah, Mawlid on 11 Rabi al-Awwal and Nations Day
+   * on Hidar 20 — each a day or more out, and each one a date the holiday guide
+   * disagreed with. One source keeps the two pages saying the same thing.
+   */
+  const holidaysByDay = useMemo(() => {
     const byDay = new Map<number, Holiday[]>();
 
     for (const occurrence of getHolidayOccurrencesForEthiopianYear(currentYear)) {
-      if (occurrence.holiday.calendar !== "islamic") continue;
       if (occurrence.ethiopian.month !== currentMonth) continue;
 
       const day = byDay.get(occurrence.ethiopian.day) ?? [];
       day.push({
         key: occurrence.holiday.id,
-        name: occurrence.holiday.amharic,
+        name: occurrence.holiday.name,
+        amharic: occurrence.holiday.amharic,
         description: occurrence.holiday.description,
-        tags: ["public", "muslim"],
+        tags: ["public", occurrence.holiday.tradition],
       });
       byDay.set(occurrence.ethiopian.day, day);
     }
@@ -150,20 +120,10 @@ const EthiopianCalendar = () => {
     return byDay;
   }, [currentYear, currentMonth]);
 
-  const { monthDays, hasHolidayData } = useMemo(() => {
-    const withIslamicHolidays = (day: CalendarDay | null) =>
+  const monthDays = useMemo(() => {
+    const withHolidays = (day: CalendarDay | null) =>
       day
-        ? {
-            ...day,
-            holidays: [
-              ...(day.holidays ?? []).filter(
-                (holiday) =>
-                  !BLOCKED_HOLIDAY_NAMES.has(holiday.name.trim()) &&
-                  !LIBRARY_ISLAMIC_KEYS.has(holiday.key)
-              ),
-              ...(islamicHolidays.get(day.ethiopian.day) ?? []),
-            ],
-          }
+        ? { ...day, holidays: holidaysByDay.get(day.ethiopian.day) ?? [] }
         : day;
 
     try {
@@ -174,23 +134,15 @@ const EthiopianCalendar = () => {
         mode: "public",
       }).generate();
 
-      return {
-        monthDays: (grid.days as Array<CalendarDay | null>).map(
-          withIslamicHolidays
-        ),
-        hasHolidayData: true,
-      };
+      return (grid.days as Array<CalendarDay | null>).map(withHolidays);
     } catch {
-      return {
-        monthDays: buildGridWithoutHolidays(
-          currentYear,
-          currentMonth,
-          new Kenat().getEthiopian()
-        ).map(withIslamicHolidays),
-        hasHolidayData: false,
-      };
+      return buildGridWithoutHolidays(
+        currentYear,
+        currentMonth,
+        new Kenat().getEthiopian()
+      ).map(withHolidays);
     }
-  }, [currentYear, currentMonth, islamicHolidays]);
+  }, [currentYear, currentMonth, holidaysByDay]);
 
   const currentMonthDetails = ETHIOPIAN_MONTHS.find(
     (month) => month.value === currentMonth.toString()
@@ -341,13 +293,6 @@ const EthiopianCalendar = () => {
         </div>
       )}
 
-      {!hasHolidayData && (
-        <p className="mb-2 flex-none rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
-          Holiday dates could not be calculated for {currentYear}. The month is
-          shown without them.
-        </p>
-      )}
-
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
         <div className="grid flex-none grid-cols-7 border-b border-slate-200 dark:border-slate-800">
           {WEEKDAY_HEADERS.map((day) => (
@@ -437,7 +382,7 @@ const EthiopianCalendar = () => {
                 key={key}
                 onClick={() => setSelectedDay(day)}
                 aria-label={`${day.holidays
-                  .map((holiday) => HOLIDAY_LABELS[holiday.key] ?? holiday.name)
+                  .map((holiday) => holiday.name)
                   .join(", ")} — ${currentMonthDetails?.label} ${day.ethiopian.day}, ${day.ethiopian.year} (${gregorian.toLocaleDateString(
                   "en-US",
                   { month: "long", day: "numeric", year: "numeric" }
@@ -520,22 +465,18 @@ const EthiopianCalendar = () => {
               </div>
 
               <DialogTitle className="sr-only">
-                {selectedDay.holidays
-                  .map((holiday) => HOLIDAY_LABELS[holiday.key] ?? holiday.name)
-                  .join(", ")}
+                {selectedDay.holidays.map((holiday) => holiday.name).join(", ")}
               </DialogTitle>
 
               <ul className="divide-y divide-slate-100 dark:divide-slate-800">
                 {selectedDay.holidays.map((holiday) => (
                   <li key={holiday.key} className="px-5 py-4">
                     <p className="font-semibold leading-snug text-slate-900 dark:text-white">
-                      {HOLIDAY_LABELS[holiday.key] ?? holiday.name}
+                      {holiday.name}
                     </p>
-                    {HOLIDAY_LABELS[holiday.key] && (
-                      <p className="mt-0.5 text-sm text-rose-600 dark:text-rose-400">
-                        {holiday.name}
-                      </p>
-                    )}
+                    <p className="mt-0.5 text-sm text-rose-600 dark:text-rose-400">
+                      {holiday.amharic}
+                    </p>
 
                     {holiday.description && (
                       <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">

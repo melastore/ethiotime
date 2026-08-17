@@ -5,6 +5,7 @@ import {
   CalendarPlus,
   ChevronLeft,
   ChevronRight,
+  Cross,
   Download,
   Droplets,
   Flame,
@@ -17,7 +18,9 @@ import {
   Sparkles,
   Sprout,
   Star,
+  Sunrise,
   Swords,
+  Users,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -70,6 +73,21 @@ const FESTIVALS: Record<string, Festival> = {
     icon: Star,
     gradient: "from-indigo-500 via-violet-500 to-purple-600",
     glow: "shadow-violet-500/30",
+  },
+  siklet: {
+    icon: Cross,
+    gradient: "from-slate-600 via-slate-700 to-zinc-800",
+    glow: "shadow-slate-600/30",
+  },
+  fasika: {
+    icon: Sunrise,
+    gradient: "from-fuchsia-500 via-purple-500 to-indigo-600",
+    glow: "shadow-fuchsia-500/30",
+  },
+  nations: {
+    icon: Users,
+    gradient: "from-yellow-400 via-amber-500 to-red-500",
+    glow: "shadow-amber-500/30",
   },
   timket: {
     icon: Droplets,

@@ -2,22 +2,42 @@ import Kenat from "kenat";
 
 import { ETHIOPIAN_MONTHS } from "@/lib/calendar-data";
 
-export type HolidayCalendarType = "ethiopian" | "gregorian" | "islamic";
+export type HolidayCalendarType =
+  | "ethiopian"
+  | "gregorian"
+  | "islamic"
+  /** Moves with Fasika, which is worked out rather than looked up. */
+  | "easter";
 
 /** Who keeps the day: the state, a church, a mosque, or a community. */
 export type HolidayTradition = "national" | "christian" | "muslim" | "cultural";
 
-export type EthiopianHoliday = {
+type HolidayDetails = {
   id: string;
   name: string;
   amharic: string;
-  calendar: HolidayCalendarType;
   tradition: HolidayTradition;
-  month: number;
-  day: number;
   description: string;
   history: string;
 };
+
+export type EthiopianHoliday = HolidayDetails &
+  (
+    | {
+        calendar: "ethiopian" | "gregorian" | "islamic";
+        /** The day it falls on, in the calendar that keeps it. */
+        month: number;
+        day: number;
+      }
+    | {
+        calendar: "easter";
+        /** Days from Fasika: 0 is Fasika itself, -2 is Siklet. */
+        offsetFromEaster: number;
+      }
+  );
+
+/** A feast on a date its own calendar fixes, as against one that moves. */
+type FixedHoliday = Extract<EthiopianHoliday, { month: number }>;
 
 export type HolidayOccurrence = {
   holiday: EthiopianHoliday;
@@ -208,10 +228,82 @@ export const ETHIOPIAN_PUBLIC_HOLIDAYS: EthiopianHoliday[] = [
     history:
       "Mawlid is observed in many Muslim communities through prayers, recitation, and community events.",
   },
+  {
+    id: "siklet",
+    name: "Siklet",
+    amharic: "ስቅለት",
+    calendar: "easter",
+    tradition: "christian",
+    offsetFromEaster: -2,
+    description: "Good Friday, kept as a fast day.",
+    history:
+      "Siklet marks the crucifixion, and is observed with a long service and a fast that is broken at Fasika.",
+  },
+  {
+    id: "fasika",
+    name: "Fasika",
+    amharic: "ፋሲካ",
+    calendar: "easter",
+    tradition: "christian",
+    offsetFromEaster: 0,
+    description: "Ethiopian Easter, the end of the fifty-five day fast.",
+    history:
+      "Fasika follows the Julian computus of bahire hasab, so it falls with Orthodox Easter rather than the Western one, and the fast is broken after the midnight service.",
+  },
+  {
+    id: "nations",
+    name: "Nations, Nationalities and Peoples' Day",
+    amharic: "የብሔር ብሔረሰቦች ቀን",
+    calendar: "ethiopian",
+    tradition: "national",
+    month: 3,
+    day: 29,
+    description: "The day the constitution was ratified.",
+    history:
+      "Ratified on Hidar 29, 1987 — 8 December 1994 — the day is marked in a different regional capital each year.",
+  },
 ];
 
 function toDate(input: { year: number; month: number; day: number }) {
   return new Date(input.year, input.month - 1, input.day, 9, 0, 0, 0);
+}
+
+const shiftDays = (date: Date, days: number) =>
+  toDate({
+    year: date.getFullYear(),
+    month: date.getMonth() + 1,
+    day: date.getDate() + days,
+  });
+
+/**
+ * Fasika, on the Gregorian calendar.
+ *
+ * The Ethiopian church works Easter out with bahire hasab, which keeps the
+ * Julian computus — the same one the Eastern Orthodox churches use — so Fasika
+ * falls on Orthodox Easter rather than on the Western one. The Julian date that
+ * computus gives is then moved onto the Gregorian calendar by the gap between
+ * the two, which grows by a day every century that is not a leap year.
+ *
+ * `toDate` normalises a day past the end of its month, so April 43 becoming
+ * May 13 needs no arithmetic of its own.
+ */
+function fasikaDate(gregorianYear: number): Date {
+  const remainder4 = gregorianYear % 4;
+  const remainder7 = gregorianYear % 7;
+  const remainder19 = gregorianYear % 19;
+  const paschalMoon = (19 * remainder19 + 15) % 30;
+  const weekday =
+    (2 * remainder4 + 4 * remainder7 - paschalMoon + 34) % 7;
+  const offset = paschalMoon + weekday + 114;
+
+  const julianToGregorian =
+    Math.floor(gregorianYear / 100) - Math.floor(gregorianYear / 400) - 2;
+
+  return toDate({
+    year: gregorianYear,
+    month: Math.floor(offset / 31),
+    day: (offset % 31) + 1 + julianToGregorian,
+  });
 }
 
 function getIslamicDateParts(date: Date): IslamicDateParts {
@@ -230,7 +322,7 @@ function getIslamicDateParts(date: Date): IslamicDateParts {
 }
 
 function resolveEthiopianHolidayDate(
-  holiday: EthiopianHoliday,
+  holiday: FixedHoliday,
   gregorianYear: number
 ): Date {
   const candidates: Date[] = [];
@@ -261,40 +353,63 @@ function resolveEthiopianHolidayDate(
   )[0];
 }
 
-function resolveIslamicHolidayDate(
-  holiday: EthiopianHoliday,
+/**
+ * Every date an Islamic holiday falls on inside one Gregorian year.
+ *
+ * There can be two of them: the lunar year is eleven days shorter than the
+ * solar one, so a feast that opens a Gregorian year in January comes round
+ * again before December is out. Returning only the first is what once hid an
+ * Eid from the Ethiopian year that the second one belonged to.
+ */
+function resolveIslamicHolidayDates(
+  holiday: FixedHoliday,
   gregorianYear: number
-): Date {
+): Date[] {
   const start = Date.UTC(gregorianYear, 0, 1, 12, 0, 0, 0);
   const end = Date.UTC(gregorianYear, 11, 31, 12, 0, 0, 0);
+  const dates: Date[] = [];
 
   for (let cursor = start; cursor <= end; cursor += ONE_DAY_MS) {
     const utcDate = new Date(cursor);
     const islamic = getIslamicDateParts(utcDate);
 
     if (islamic.month === holiday.month && islamic.day === holiday.day) {
-      return toDate({
-        year: utcDate.getUTCFullYear(),
-        month: utcDate.getUTCMonth() + 1,
-        day: utcDate.getUTCDate(),
-      });
+      dates.push(
+        toDate({
+          year: utcDate.getUTCFullYear(),
+          month: utcDate.getUTCMonth() + 1,
+          day: utcDate.getUTCDate(),
+        })
+      );
     }
   }
 
-  return toDate({ year: gregorianYear, month: 1, day: 1 });
+  return dates;
 }
 
-export function resolveHolidayOccurrence(
+/** Every date a holiday falls on inside one Gregorian year. */
+function resolveHolidayDates(
   holiday: EthiopianHoliday,
   gregorianYear: number
-): HolidayOccurrence {
-  const gregorianDate =
-    holiday.calendar === "gregorian"
-      ? toDate({ year: gregorianYear, month: holiday.month, day: holiday.day })
-      : holiday.calendar === "ethiopian"
-        ? resolveEthiopianHolidayDate(holiday, gregorianYear)
-        : resolveIslamicHolidayDate(holiday, gregorianYear);
+): Date[] {
+  switch (holiday.calendar) {
+    case "easter":
+      return [shiftDays(fasikaDate(gregorianYear), holiday.offsetFromEaster)];
+    case "gregorian":
+      return [
+        toDate({ year: gregorianYear, month: holiday.month, day: holiday.day }),
+      ];
+    case "ethiopian":
+      return [resolveEthiopianHolidayDate(holiday, gregorianYear)];
+    case "islamic":
+      return resolveIslamicHolidayDates(holiday, gregorianYear);
+  }
+}
 
+function occurrenceOf(
+  holiday: EthiopianHoliday,
+  gregorianDate: Date
+): HolidayOccurrence {
   const ethiopianDate = new Kenat(gregorianDate).getEthiopian();
   const monthData = ETHIOPIAN_MONTHS[ethiopianDate.month - 1];
   const islamicDate = getIslamicDateParts(gregorianDate);
@@ -318,11 +433,20 @@ export function resolveHolidayOccurrence(
   };
 }
 
+export function resolveHolidayOccurrences(
+  holiday: EthiopianHoliday,
+  gregorianYear: number
+): HolidayOccurrence[] {
+  return resolveHolidayDates(holiday, gregorianYear).map((date) =>
+    occurrenceOf(holiday, date)
+  );
+}
+
 export function getHolidayOccurrencesForYear(
   gregorianYear: number
 ): HolidayOccurrence[] {
-  return ETHIOPIAN_PUBLIC_HOLIDAYS.map((holiday) =>
-    resolveHolidayOccurrence(holiday, gregorianYear)
+  return ETHIOPIAN_PUBLIC_HOLIDAYS.flatMap((holiday) =>
+    resolveHolidayOccurrences(holiday, gregorianYear)
   ).sort((a, b) => a.gregorianDate.getTime() - b.gregorianDate.getTime());
 }
 
