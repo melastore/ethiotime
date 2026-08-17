@@ -286,6 +286,9 @@ export default function FocusTimer() {
   const [now, setNow] = useState(0);
   const [chimeOn, setChimeOn] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
+  const [drafts, setDrafts] = useState<Partial<Record<keyof FocusSettings, string>>>(
+    {}
+  );
   const [notice, setNotice] = useState<string | null>(null);
 
   // Read after mount: the server cannot render the clock or localStorage.
@@ -468,11 +471,40 @@ export default function FocusTimer() {
     (_, index) => index < timer.focusDone
   );
 
-  const updateSetting = (key: keyof FocusSettings, value: number) =>
+  const commitSetting = (key: keyof FocusSettings, value: number) =>
     setSettings((current) => ({
       ...current,
-      [key]: Math.min(180, Math.max(1, Math.round(value) || 1)),
+      [key]: Math.min(180, Math.max(1, Math.round(value))),
     }));
+
+  /**
+   * What is in the box while it is being typed in.
+   *
+   * The stored lengths are numbers and can never be empty, so reading the box
+   * straight back into them means clearing it puts a 1 there — and the 1 cannot
+   * then be deleted to type a length of its own. The typed text is kept as text
+   * instead: the box may be empty mid-edit, a length is only stored once it is
+   * a usable number, and leaving the box brings back the stored one.
+   */
+  const editSetting = (key: keyof FocusSettings, text: string) => {
+    setDrafts((current) => ({ ...current, [key]: text }));
+
+    const parsed = Number.parseInt(text, 10);
+    if (Number.isFinite(parsed) && parsed >= 1 && parsed <= 180) {
+      commitSetting(key, parsed);
+    }
+  };
+
+  const settleSetting = (key: keyof FocusSettings) => {
+    const parsed = Number.parseInt(drafts[key] ?? "", 10);
+    if (Number.isFinite(parsed)) commitSetting(key, parsed);
+
+    setDrafts((current) => {
+      const rest = { ...current };
+      delete rest[key];
+      return rest;
+    });
+  };
 
   return (
     <section className="mx-auto w-full max-w-3xl px-1 py-2">
@@ -645,10 +677,10 @@ export default function FocusTimer() {
                   type="number"
                   min={1}
                   max={180}
-                  value={settings[key]}
-                  onChange={(event) =>
-                    updateSetting(key, Number.parseInt(event.target.value, 10))
-                  }
+                  inputMode="numeric"
+                  value={drafts[key] ?? String(settings[key])}
+                  onChange={(event) => editSetting(key, event.target.value)}
+                  onBlur={() => settleSetting(key)}
                   className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm tabular-nums text-slate-900 outline-none transition-colors focus:border-teal-600 focus:ring-2 focus:ring-teal-600/20 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
                 />
               </div>
