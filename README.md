@@ -22,7 +22,7 @@ offline fallback.
 
 ## Running it
 
-Requires Node 20 or newer.
+Requires Node 24 or newer: the tests are TypeScript run directly by `node --test`.
 
 ```bash
 npm install
