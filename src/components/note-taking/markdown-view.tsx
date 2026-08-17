@@ -8,7 +8,7 @@ import rehypeHighlight from "rehype-highlight";
 
 import "katex/dist/katex.min.css";
 
-import { normalizeMath } from "@/lib/markdown-normalize";
+import { normalizeNote } from "@/lib/markdown-normalize";
 import { rehypeMath } from "@/lib/rehype-math";
 import { cn } from "@/lib/utils";
 
@@ -52,7 +52,7 @@ function MarkdownViewComponent({
           [rehypeHighlight, { detect: true, ignoreMissing: true }],
         ]}
       >
-        {normalizeMath(content)}
+        {normalizeNote(content)}
       </ReactMarkdown>
     </div>
   );

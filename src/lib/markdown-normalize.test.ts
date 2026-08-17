@@ -27,9 +27,13 @@ test("reads a bracket alone on its line as a display formula", () => {
   );
 });
 
-test("leaves an unbalanced bracket alone rather than opening a formula", () => {
+test("an unbalanced bracket does not open a formula that never ends", () => {
   const input = ["[", "\\frac{a}{b}"].join("\n");
-  assert.equal(normalizeMath(input), input);
+  // The bracket stays where it was; only the formula line itself is typeset.
+  assert.equal(
+    normalizeMath(input),
+    ["[", "$$", "\\frac{a}{b}", "$$"].join("\n")
+  );
 });
 
 test("does not disturb a Markdown link", () => {
@@ -62,6 +66,85 @@ test("restores the = that a setext heading rule ate inside a formula", () => {
 
 test("keeps a real setext heading outside a formula", () => {
   const input = ["Chapter 5", "=========", "", "text"].join("\n");
+  assert.equal(normalizeMath(input), input);
+});
+
+test("typesets a formula left with one stray delimiter on it", () => {
+  const pasted =
+    "[x_i,x_{i+1}] = \\frac{[x_{i+1}]-[x_i]}{x_{i+2}-x_i}$}";
+
+  assert.equal(
+    normalizeMath(pasted),
+    [
+      "$$",
+      "[x_i,x_{i+1}] = \\frac{[x_{i+1}]-[x_i]}{x_{i+2}-x_i}",
+      "$$",
+    ].join("\n")
+  );
+});
+
+test("typesets a formula pasted with its delimiters gone entirely", () => {
+  assert.equal(
+    normalizeMath("\\frac{dy}{dx} = 3x^2"),
+    ["$$", "\\frac{dy}{dx} = 3x^2", "$$"].join("\n")
+  );
+});
+
+test("reads a one-line bracketed formula as display maths", () => {
+  assert.equal(
+    normalizeMath("[ \\frac{a}{b} ]"),
+    ["$$", "\\frac{a}{b}", "$$"].join("\n")
+  );
+});
+
+test("keeps brackets that are part of the formula rather than around it", () => {
+  assert.equal(
+    normalizeMath("[a,b] = [c,d_{1}]"),
+    ["$$", "[a,b] = [c,d_{1}]", "$$"].join("\n")
+  );
+});
+
+test("leaves a sentence that merely contains a formula as prose", () => {
+  const input = "The area of the circle is \\pi r^2 exactly";
+  assert.equal(normalizeMath(input), input);
+});
+
+test("leaves a price alone", () => {
+  const input = "the book costs $5 today";
+  assert.equal(normalizeMath(input), input);
+});
+
+test("wraps a bare \\begin{align} block in display maths", () => {
+  const input = [
+    "Working:",
+    "",
+    "\\begin{align}",
+    "a &= b + c \\\\",
+    "d &= e",
+    "\\end{align}",
+    "",
+    "done",
+  ].join("\n");
+
+  assert.equal(
+    normalizeMath(input),
+    [
+      "Working:",
+      "",
+      "$$",
+      "\\begin{align}",
+      "a &= b + c \\\\",
+      "d &= e",
+      "\\end{align}",
+      "$$",
+      "",
+      "done",
+    ].join("\n")
+  );
+});
+
+test("leaves an environment that already carries its delimiters", () => {
+  const input = ["$$", "\\begin{cases}", "x", "\\end{cases}", "$$"].join("\n");
   assert.equal(normalizeMath(input), input);
 });
 
