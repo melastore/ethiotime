@@ -19,24 +19,14 @@ import {
 import { MarkdownView } from "@/components/note-taking/markdown-lazy";
 import { NoteReader } from "@/components/note-taking/note-reader";
 import { previewOf } from "@/lib/markdown-preview";
-import { readJson, writeJson } from "@/lib/storage";
+import {
+  NOTES_STORAGE_KEY,
+  type Note,
+  loadNotes,
+  noteHeading,
+} from "@/lib/notes";
+import { writeJson } from "@/lib/storage";
 import { cn } from "@/lib/utils";
-
-/**
- * The stored shape is kept as-is so notes written by earlier versions keep
- * working; `title` and `color` are no longer authored, only displayed.
- */
-interface Note {
-  id: string;
-  title: string;
-  content: string;
-  color: string;
-  tags: string[];
-  isFavorite: boolean;
-  updatedAt: number;
-}
-
-const STORAGE_KEY = "modern-notes-data";
 
 type NotesTab = "all" | "favorites";
 
@@ -50,14 +40,6 @@ const slugify = (value: string) =>
     .replace(/^-+|-+$/g, "")
     .slice(0, 60) || "note";
 
-/** A note has no title field any more, so the first meaningful line names it. */
-function noteHeading(note: Note): string {
-  if (note.title.trim()) return note.title.trim();
-
-  const firstLine = note.content.split("\n").find((line) => line.trim());
-  return firstLine?.replace(/^#+\s*/, "").trim().slice(0, 80) || "Note";
-}
-
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -69,11 +51,6 @@ function downloadBlob(blob: Blob, filename: string) {
   // Revoked late: Firefox cancels the download if the URL dies too soon.
   window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
-
-const loadNotesFromStorage = (): Note[] =>
-  readJson<Note[]>(STORAGE_KEY, [], (value): value is Note[] =>
-    Array.isArray(value)
-  );
 
 /** Tags are written inline as #hashtags and pulled out of the text on save. */
 function extractTags(content: string): string[] {
@@ -257,12 +234,12 @@ export default function NoteTaking() {
   }, [printNote]);
 
   useEffect(() => {
-    setNotes(loadNotesFromStorage());
+    setNotes(loadNotes());
     setIsMounted(true);
   }, []);
 
   useEffect(() => {
-    if (isMounted) writeJson(STORAGE_KEY, notes);
+    if (isMounted) writeJson(NOTES_STORAGE_KEY, notes);
   }, [notes, isMounted]);
 
   // Keeps the "5m ago" stamps honest without re-rendering constantly.
