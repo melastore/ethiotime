@@ -16,6 +16,7 @@ import {
   WEEKDAY_HEADERS,
   getCenteredEthiopianYears,
 } from "@/lib/calendar-data";
+import { getHolidayOccurrencesForEthiopianYear } from "@/lib/ethiopian-holidays";
 
 interface CalendarDateParts {
   year: number;
@@ -35,6 +36,9 @@ interface Holiday {
  * interface has nothing to show. These cover every key it emits.
  */
 const HOLIDAY_LABELS: Record<string, string> = {
+  "eid-al-adha": "Eid al-Adha",
+  "eid-al-fitr": "Eid al-Fitr",
+  mawlid: "Mawlid al-Nabi",
   adwa: "Adwa Victory Day",
   beherbehereseb: "Nations and Nationalities Day",
   eidAdha: "Eid al-Adha",
@@ -62,6 +66,16 @@ const BLOCKED_HOLIDAY_NAMES = new Set([
   "Derg Downfall Day",
   "የሰማዕታት ቀን",
 ]);
+
+/**
+ * The library's own keys for the Islamic feasts, which are dropped in favour of
+ * the app's dates for them.
+ *
+ * The library puts Eid al-Adha on 9 Dhu al-Hijjah and Mawlid on 11 Rabi
+ * al-Awwal — a day early in both cases — so the calendar and the holiday guide
+ * showed different dates for the same feast. Both now read from `src/lib`.
+ */
+const LIBRARY_ISLAMIC_KEYS = new Set(["eidAdha", "eidFitr", "moulid"]);
 
 const toGregorianDate = (parts: CalendarDateParts) =>
   new Date(parts.year, parts.month - 1, parts.day);
@@ -115,7 +129,43 @@ const EthiopianCalendar = () => {
   const currentYear = currentEthDate.year;
   const currentMonth = currentEthDate.month;
 
+  /** The app's own Islamic feasts for this month, keyed by Ethiopian day. */
+  const islamicHolidays = useMemo(() => {
+    const byDay = new Map<number, Holiday[]>();
+
+    for (const occurrence of getHolidayOccurrencesForEthiopianYear(currentYear)) {
+      if (occurrence.holiday.calendar !== "islamic") continue;
+      if (occurrence.ethiopian.month !== currentMonth) continue;
+
+      const day = byDay.get(occurrence.ethiopian.day) ?? [];
+      day.push({
+        key: occurrence.holiday.id,
+        name: occurrence.holiday.amharic,
+        description: occurrence.holiday.description,
+        tags: ["public", "muslim"],
+      });
+      byDay.set(occurrence.ethiopian.day, day);
+    }
+
+    return byDay;
+  }, [currentYear, currentMonth]);
+
   const { monthDays, hasHolidayData } = useMemo(() => {
+    const withIslamicHolidays = (day: CalendarDay | null) =>
+      day
+        ? {
+            ...day,
+            holidays: [
+              ...(day.holidays ?? []).filter(
+                (holiday) =>
+                  !BLOCKED_HOLIDAY_NAMES.has(holiday.name.trim()) &&
+                  !LIBRARY_ISLAMIC_KEYS.has(holiday.key)
+              ),
+              ...(islamicHolidays.get(day.ethiopian.day) ?? []),
+            ],
+          }
+        : day;
+
     try {
       const grid = new MonthGrid({
         year: currentYear,
@@ -125,15 +175,8 @@ const EthiopianCalendar = () => {
       }).generate();
 
       return {
-        monthDays: (grid.days as Array<CalendarDay | null>).map((day) =>
-          day
-            ? {
-                ...day,
-                holidays: (day.holidays ?? []).filter(
-                  (holiday) => !BLOCKED_HOLIDAY_NAMES.has(holiday.name.trim())
-                ),
-              }
-            : day
+        monthDays: (grid.days as Array<CalendarDay | null>).map(
+          withIslamicHolidays
         ),
         hasHolidayData: true,
       };
@@ -143,11 +186,11 @@ const EthiopianCalendar = () => {
           currentYear,
           currentMonth,
           new Kenat().getEthiopian()
-        ),
+        ).map(withIslamicHolidays),
         hasHolidayData: false,
       };
     }
-  }, [currentYear, currentMonth]);
+  }, [currentYear, currentMonth, islamicHolidays]);
 
   const currentMonthDetails = ETHIOPIAN_MONTHS.find(
     (month) => month.value === currentMonth.toString()
