@@ -15,6 +15,7 @@ import { EthiopianNow } from "@/components/layout/ethiopian-now";
 import { useLanguage } from "@/components/providers/language-provider";
 import type { TranslationKey } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
+import { asset } from "@/lib/base-path";
 import { TOOL_DEFINITIONS } from "@/lib/tool-registry";
 
 type NavItem = {
@@ -59,7 +60,7 @@ export function Sidebar() {
             className="flex items-center justify-center rounded-2xl border border-slate-200/80 bg-white/95 p-4 shadow-sm dark:border-slate-700/80 dark:bg-slate-900/75"
           >
             <Image
-              src="/ethiotime-logo.svg"
+              src={asset("/ethiotime-logo.svg")}
               alt="EthioTime"
               width={280}
               height={80}
@@ -126,7 +127,7 @@ export function Sidebar() {
         <div className="flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
             <Image
-              src="/ethiotime-mark.svg"
+              src={asset("/ethiotime-mark.svg")}
               alt="EthioTime"
               width={34}
               height={34}

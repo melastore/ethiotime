@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowRightLeft,
   Calendar,
@@ -114,9 +113,6 @@ function FieldSelect({
 }
 
 export default function EthiopianDateConverter() {
-  const pathname = usePathname();
-  const router = useRouter();
-  const searchParams = useSearchParams();
   const [mode, setMode] = useState<CalendarMode>("gregorian");
   const [input, setInput] = useState<DateInput>(
     getTodayInputForMode("gregorian")
@@ -138,10 +134,11 @@ export default function EthiopianDateConverter() {
   useEffect(() => {
     if (!mounted) return;
 
-    const fromParam = searchParams.get("from");
-    const dayParam = searchParams.get("day");
-    const monthParam = searchParams.get("month");
-    const yearParam = searchParams.get("year");
+    const params = new URLSearchParams(window.location.search);
+    const fromParam = params.get("from");
+    const dayParam = params.get("day");
+    const monthParam = params.get("month");
+    const yearParam = params.get("year");
 
     if (!fromParam || !dayParam || !monthParam || !yearParam) {
       return;
@@ -181,27 +178,34 @@ export default function EthiopianDateConverter() {
       month: String(parsedMonth),
       year: String(parsedYear),
     });
-  }, [mounted, searchParams]);
+  }, [mounted]);
 
+  // Kept in the URL so a converted date can be linked to. Written with the
+  // history API rather than the router: this only ever rewrites the query of the
+  // page already on screen, and there is nothing to re-render or scroll.
   useEffect(() => {
     if (!mounted) return;
 
+    const params = new URLSearchParams(window.location.search);
     if (
-      searchParams.get("from") === mode &&
-      searchParams.get("day") === input.day &&
-      searchParams.get("month") === input.month &&
-      searchParams.get("year") === input.year
+      params.get("from") === mode &&
+      params.get("day") === input.day &&
+      params.get("month") === input.month &&
+      params.get("year") === input.year
     ) {
       return;
     }
 
-    const params = new URLSearchParams(searchParams.toString());
     params.set("from", mode);
     params.set("day", input.day);
     params.set("month", input.month);
     params.set("year", input.year);
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
-  }, [input.day, input.month, input.year, mode, mounted, pathname, router, searchParams]);
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}?${params.toString()}`
+    );
+  }, [input.day, input.month, input.year, mode, mounted]);
 
   const isGregorianInput = mode === "gregorian";
 

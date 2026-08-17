@@ -15,11 +15,15 @@ const HIGH_PRIORITY_ROUTES = new Set([
   "/holidays",
 ]);
 
+// Emitted as a file at build time; the app has no server to generate it.
+export const dynamic = "force-static";
+
 export default function sitemap(): MetadataRoute.Sitemap {
   const now = new Date();
 
   return ROUTES.map((route) => ({
-    url: `${siteUrl}${route}`,
+    // Trailing slashes match the exported files; a static host will not redirect.
+    url: route === "/" ? `${siteUrl}/` : `${siteUrl}${route}/`,
     lastModified: now,
     changeFrequency: HIGH_PRIORITY_ROUTES.has(route) ? "weekly" : "monthly",
     priority: route === "/" ? 1 : HIGH_PRIORITY_ROUTES.has(route) ? 0.9 : 0.8,

@@ -7,8 +7,6 @@ export const metadata: Metadata = {
     "Convert between Ethiopian and Gregorian dates with weekday and month context.",
 };
 
-export const dynamic = "force-dynamic";
-
 const DateConverterPage = () => {
   return <EthiopianDateConverter />;
 };

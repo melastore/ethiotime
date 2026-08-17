@@ -5,6 +5,7 @@ import "./globals.css";
 import { AppFooter } from "@/components/layout/footer";
 import { Sidebar } from "@/components/layout/sidebar";
 import { LanguageProvider } from "@/components/providers/language-provider";
+import { BASE_PATH, asset } from "@/lib/base-path";
 
 const siteUrl =
   process.env.NEXT_PUBLIC_SITE_URL?.trim() || "https://ethiotime.com";
@@ -33,7 +34,7 @@ export const metadata: Metadata = {
       "am-ET": "/",
     },
   },
-  manifest: "/manifest.webmanifest",
+  manifest: asset("/manifest.webmanifest"),
   robots: {
     index: true,
     follow: true,
@@ -57,9 +58,9 @@ export const metadata: Metadata = {
     email: false,
   },
   icons: {
-    icon: "/ethiotime-mark.svg",
-    shortcut: "/ethiotime-mark.svg",
-    apple: "/ethiotime-mark.svg",
+    icon: asset("/ethiotime-mark.svg"),
+    shortcut: asset("/ethiotime-mark.svg"),
+    apple: asset("/ethiotime-mark.svg"),
   },
   openGraph: {
     title: "EthioTime",
@@ -132,7 +133,9 @@ export default function RootLayout({
         <Script id="ethiotime-sw-register" strategy="afterInteractive">{`
           if ('serviceWorker' in navigator) {
             window.addEventListener('load', function () {
-              navigator.serviceWorker.register('/sw.js').catch(function () {});
+              navigator.serviceWorker
+                .register('${BASE_PATH}/sw.js', { scope: '${BASE_PATH}/' })
+                .catch(function () {});
             });
           }
         `}</Script>

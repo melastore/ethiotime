@@ -8,8 +8,6 @@ export const metadata: Metadata = {
     "Browse Ethiopian months, weekdays, and holiday details in an interactive calendar.",
 };
 
-export const dynamic = "force-dynamic";
-
 const EthiopianCalendarPage = () => {
   return <EthiopianCalendar />;
 };

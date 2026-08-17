@@ -1,14 +1,18 @@
 // Bump this whenever the caching rules change: the activate handler deletes every
 // cache that does not match, which is what evicts stale entries from older versions.
-const CACHE_NAME = "ethiotime-v2";
+const CACHE_NAME = "ethiotime-v3";
+
+// The site may be served from a sub-path, so every path is built from where this
+// worker itself was served rather than assumed to sit at the root.
+const BASE = self.location.pathname.replace(/sw\.js$/, "");
 
 // Only genuinely static things belong in the precache. Pages are deliberately absent:
 // every tool renders "today", so a cached page is a wrong page.
 const STATIC_ASSETS = [
-  "/offline.html",
-  "/manifest.webmanifest",
-  "/ethiotime-mark.svg",
-  "/ethiotime-logo.svg",
+  `${BASE}offline.html`,
+  `${BASE}manifest.webmanifest`,
+  `${BASE}ethiotime-mark.svg`,
+  `${BASE}ethiotime-logo.svg`,
 ];
 
 self.addEventListener("install", (event) => {
@@ -41,7 +45,7 @@ self.addEventListener("activate", (event) => {
  */
 function isImmutableAsset(url) {
   return (
-    url.pathname.startsWith("/_next/static/") ||
+    url.pathname.startsWith(`${BASE}_next/static/`) ||
     STATIC_ASSETS.includes(url.pathname)
   );
 }
@@ -57,7 +61,7 @@ self.addEventListener("fetch", (event) => {
   // Page loads: always go to the network so the date is current, and fall back to
   // the offline page only when the network is genuinely unavailable.
   if (request.mode === "navigate") {
-    event.respondWith(fetch(request).catch(() => caches.match("/offline.html")));
+    event.respondWith(fetch(request).catch(() => caches.match(`${BASE}offline.html`)));
     return;
   }
 

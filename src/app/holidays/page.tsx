@@ -8,8 +8,6 @@ export const metadata: Metadata = {
     "Ethiopian public holiday details, dual-calendar dates, and history/context.",
 };
 
-export const dynamic = "force-dynamic";
-
 export default function HolidayGuidePage() {
   return <HolidayGuide />;
 }

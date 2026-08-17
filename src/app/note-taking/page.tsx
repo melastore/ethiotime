@@ -8,8 +8,6 @@ export const metadata: Metadata = {
     "Create, organize, and favorite local-first notes with color coding and quick search.",
 };
 
-export const dynamic = "force-dynamic";
-
 const NoteTakingPage = () => {
   return <NoteTaking />;
 };

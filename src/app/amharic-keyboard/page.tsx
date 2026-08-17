@@ -8,8 +8,6 @@ export const metadata: Metadata = {
     "Type Amharic quickly with transliteration support and instant conversion from Latin characters.",
 };
 
-export const dynamic = "force-dynamic";
-
 const AmharicKeyboardPage = () => {
   return <AmharicKeyboard />;
 };

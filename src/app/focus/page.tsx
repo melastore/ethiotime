@@ -8,8 +8,6 @@ export const metadata: Metadata = {
     "Study a note in timed rounds and keep the hours, with streaks on the Ethiopian calendar.",
 };
 
-export const dynamic = "force-dynamic";
-
 const FocusPage = () => {
   return <FocusTimer />;
 };

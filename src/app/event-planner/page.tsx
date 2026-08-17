@@ -8,8 +8,6 @@ export const metadata: Metadata = {
     "Plan events in Ethiopian and Gregorian calendars with reminders, recurring rules, and ICS export.",
 };
 
-export const dynamic = "force-dynamic";
-
 export default function EventPlannerPage() {
   return <EventPlanner />;
 }

@@ -11,8 +11,6 @@ export const metadata: Metadata = {
     "Explore Ethiopian date conversion, calendar, typing, age calculation, and note tools in one place.",
 };
 
-export const dynamic = "force-dynamic";
-
 export default function Home() {
   const jsonLd = {
     "@context": "https://schema.org",

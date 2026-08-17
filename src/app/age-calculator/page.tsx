@@ -8,8 +8,6 @@ export const metadata: Metadata = {
     "Calculate age accurately using both Gregorian and Ethiopian calendar systems.",
 };
 
-export const dynamic = "force-dynamic";
-
 const AgeCalculatorPage = () => {
   return <AgeCalculator />;
 };
