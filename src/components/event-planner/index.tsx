@@ -589,7 +589,7 @@ export default function EventPlanner() {
 
   if (!mounted) {
     return (
-      <section className="mx-auto w-full max-w-5xl pb-4 pt-2">
+      <section className="w-full pb-4 pt-2">
         <p className={EYEBROW}>{isAmharic ? "ክስተት እቅድ" : "Event planner"}</p>
         <h1 className="mt-1.5 text-3xl font-black tracking-tight text-slate-900 sm:text-4xl dark:text-white">
           {isAmharic ? "የሚመጣውን ያቅዱ" : "What is coming up"}
@@ -608,7 +608,7 @@ export default function EventPlanner() {
   const next = upcoming[0];
 
   return (
-    <section className="mx-auto w-full max-w-5xl pb-4 pt-2">
+    <section className="w-full pb-4 pt-2">
       <header className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className={EYEBROW}>{isAmharic ? "ክስተት እቅድ" : "Event planner"}</p>
