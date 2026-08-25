@@ -6,13 +6,19 @@ export type Env = {
   TELEGRAM_WEBHOOK_SECRET: string;
 };
 
+// The dev site runs on localhost and the real one on Pages, so both have to be
+// let through by name: a wildcard would let any page on the internet read a
+// shared note out of someone's browser.
+const LOCALHOST = /^http:\/\/localhost(:\d+)?$/;
+
 // The site is served from GitHub Pages, so every browser call is cross-origin.
 export function cors(env: Env, request: Request): Record<string, string> {
   const origin = request.headers.get("Origin") ?? "";
   const allowed = new URL(env.APP_URL).origin;
+  const permitted = origin === allowed || LOCALHOST.test(origin) ? origin : allowed;
 
   return {
-    "Access-Control-Allow-Origin": origin === allowed ? origin : allowed,
+    "Access-Control-Allow-Origin": permitted,
     "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type,X-Edit-Token",
     "Access-Control-Max-Age": "86400",
