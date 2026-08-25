@@ -45,6 +45,7 @@ import {
   getUpcomingHolidayOccurrences,
   gregorianYearsOfEthiopianYear,
 } from "@/lib/ethiopian-holidays";
+import { addisWallClock } from "@/lib/addis-time";
 import { createIcsFileContent, downloadIcsContent } from "@/lib/ics";
 import { cn } from "@/lib/utils";
 
@@ -423,10 +424,19 @@ export default function HolidayGuide() {
   // Resolved after mount so the server and the browser cannot disagree about
   // what "today" is and trip a hydration mismatch.
   const [today, setToday] = useState<number | null>(null);
+  // Set when the device is a day off Ethiopia, which puts every count below a
+  // day out for anyone reading from abroad.
+  const [addisShift, setAddisShift] = useState(0);
 
   useEffect(() => {
-    setToday(startOfDay(new Date()));
+    const now = new Date();
+    setToday(startOfDay(now));
     setThisMonth(getCurrentEthiopianMonth());
+    setAddisShift(
+      Math.round(
+        (startOfDay(addisWallClock(now)) - startOfDay(now)) / ONE_DAY
+      )
+    );
   }, []);
 
   // A `?holiday=` link — the one the command palette hands out — opens straight
@@ -528,6 +538,15 @@ export default function HolidayGuide() {
   const daysUntil = (date: Date) =>
     today === null ? null : Math.round((startOfDay(date) - today) / ONE_DAY);
 
+  // Same count, read from Ethiopia. Only worth saying when the two disagree.
+  const addisLabel = (days: number) => {
+    const there = days - addisShift;
+    if (there === 0) return "today in Ethiopia";
+    if (there === 1) return "tomorrow in Ethiopia";
+    if (there === -1) return "yesterday in Ethiopia";
+    return `${Math.abs(there)} days ${there > 0 ? "away" : "ago"} in Ethiopia`;
+  };
+
   const remaining = useMemo(
     () =>
       today === null
@@ -615,6 +634,11 @@ export default function HolidayGuide() {
                         ? "day away"
                         : "days away"}
                   </p>
+                  {addisShift !== 0 && (
+                    <p className="mt-1 text-[11px] font-semibold text-amber-200">
+                      {addisLabel(heroDays)}
+                    </p>
+                  )}
                 </div>
               )}
               <button

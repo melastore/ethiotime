@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Kenat from "kenat";
 
 import { useLanguage } from "@/components/providers/language-provider";
+import { addisWallClock, matchesAddis } from "@/lib/addis-time";
 import { ETHIOPIAN_MONTHS } from "@/lib/calendar-data";
 import { cn } from "@/lib/utils";
 
@@ -61,17 +62,32 @@ export function EthiopianNow({ compact = false, className }: EthiopianNowProps) 
     }
   }, [compact, mounted, now]);
 
-  const ethiopianClockLabel = useMemo(() => {
-    if (!mounted) return "";
+  const clockOf = useMemo(
+    () => (moment: Date) =>
+      new Intl.DateTimeFormat(undefined, {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: compact ? undefined : "2-digit",
+        hour12: true,
+      }).format(new Date(moment.getTime() - ETHIOPIAN_CLOCK_SHIFT_MS)),
+    [compact]
+  );
 
-    const shifted = new Date(now.getTime() - ETHIOPIAN_CLOCK_SHIFT_MS);
-    return new Intl.DateTimeFormat(undefined, {
-      hour: "2-digit",
-      minute: "2-digit",
-      second: compact ? undefined : "2-digit",
-      hour12: true,
-    }).format(shifted);
-  }, [compact, mounted, now]);
+  const ethiopianClockLabel = useMemo(
+    () => (mounted ? clockOf(now) : ""),
+    [clockOf, mounted, now]
+  );
+
+  // Away from Ethiopia the reading above is the local one, which is what you
+  // want for your own day and not what you want for home. Zones that keep the
+  // same clock, Nairobi among them, add nothing and are left out.
+  const addis = useMemo(() => {
+    if (!mounted || matchesAddis(now)) return null;
+
+    const there = addisWallClock(now);
+    const sameDay = there.toDateString() === now.toDateString();
+    return { clock: clockOf(there), sameDay };
+  }, [clockOf, mounted, now]);
 
   if (!mounted) {
     return (
@@ -113,6 +129,21 @@ export function EthiopianNow({ compact = false, className }: EthiopianNowProps) 
       >
         {ethiopianClockLabel}
       </p>
+      {addis && (
+        <p className="mt-1 flex flex-wrap items-baseline gap-x-1.5 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+          <span className="uppercase tracking-wider">
+            {language === "am" ? "አዲስ አበባ" : "Addis"}
+          </span>
+          <span className="font-mono text-slate-700 dark:text-slate-200">
+            {addis.clock}
+          </span>
+          {!addis.sameDay && (
+            <span className="text-amber-600 dark:text-amber-400">
+              {language === "am" ? "(ሌላ ቀን)" : "(another day)"}
+            </span>
+          )}
+        </p>
+      )}
       {!compact && (
         <p className="mt-1 text-[10px] text-slate-500 dark:text-slate-400">
           {language === "am"
