@@ -101,8 +101,10 @@ const ELEMENT_SKIN: Record<
   },
 };
 
+// Solid, not frosted. backdrop-blur makes a stacking context, which trapped a
+// picker's open list inside the card and let the panel below paint over it.
 const CARD =
-  "rounded-3xl border border-slate-200/80 bg-white/80 p-5 shadow-sm backdrop-blur-sm sm:p-6 dark:border-slate-800 dark:bg-slate-900/70";
+  "rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6 dark:border-slate-800 dark:bg-slate-900";
 
 const EYEBROW =
   "text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400";
