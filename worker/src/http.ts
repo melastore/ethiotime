@@ -1,5 +1,6 @@
 export type Env = {
   DB: D1Database;
+  SCHEDULER: DurableObjectNamespace;
   APP_URL: string;
   TELEGRAM_BOT: string;
   TELEGRAM_TOKEN: string;

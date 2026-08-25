@@ -2,10 +2,19 @@ name = "ethiotime-api"
 main = "src/index.ts"
 compatibility_date = "2025-08-01"
 
-# Every minute: a reminder fires at the first tick past its time, and "At start"
-# has to mean at start rather than up to five minutes after it.
+# The Durable Object alarm does the timing now. This is only a backstop for an
+# alarm that was lost, plus the nightly sweeping.
 [triggers]
-crons = ["* * * * *"]
+crons = ["*/5 * * * *"]
+
+[[durable_objects.bindings]]
+name = "SCHEDULER"
+class_name = "ReminderScheduler"
+
+# SQLite-backed, which is what the free plan supports.
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["ReminderScheduler"]
 
 [[d1_databases]]
 # The name the code sees: worker/src/http.ts declares env.DB.

@@ -1,5 +1,6 @@
 import { HttpError, json, readJson, requireString, type Env } from "./http.ts";
 import { shortId } from "./id.ts";
+import { armScheduler } from "./scheduler.ts";
 
 const CODE_TTL_MS = 15 * 60_000;
 const MAX_REMINDERS = 200;
@@ -131,6 +132,10 @@ export async function putReminders(request: Request, env: Env) {
   ];
 
   await env.DB.batch(statements);
+  // The earliest pending reminder may have moved, so the alarm is reset now
+  // rather than waiting for the cron to notice.
+  await armScheduler(env);
+
   return json({ stored: rows.length });
 }
 

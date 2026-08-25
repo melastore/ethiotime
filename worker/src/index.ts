@@ -10,7 +10,10 @@ import {
   unlink,
   webhook,
 } from "./telegram.ts";
+import { armScheduler, ReminderScheduler } from "./scheduler.ts";
 import { contributeWords, listWords } from "./words.ts";
+
+export { ReminderScheduler };
 
 async function route(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
@@ -79,10 +82,13 @@ export default {
     }
   },
 
+  // The alarm does the timing; this is the backstop for anything it dropped,
+  // and where the housekeeping lives.
   async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext) {
     ctx.waitUntil(
       (async () => {
         await sendDueReminders(env);
+        await armScheduler(env);
         await sweepReminders(env);
         await sweepNotes(env);
       })()
