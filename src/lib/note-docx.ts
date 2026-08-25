@@ -1,14 +1,9 @@
-/**
- * Markdown note -> .docx.
- *
- * Formulas are converted LaTeX -> MathML -> OMML, which is Word's own equation
- * format, so they arrive as equations the reader can click into and edit rather
- * than as pictures of equations.
- *
- * This module pulls in the document writer and the whole TeX typesetter, so it
- * is meant to be reached through `await import()` at the moment of export and
- * never from the initial bundle.
- */
+// Markdown note to .docx. Formulas go LaTeX -> MathML -> OMML, Word's own
+// equation format, so they land as equations you can click into rather than
+// pictures.
+//
+// Pulls in the document writer and the whole TeX typesetter, so reach it through
+// `await import()` at export time, never from the initial bundle.
 
 import katex from "katex";
 // Must be registered here too: the export path does not go through the viewer,
@@ -42,6 +37,7 @@ import type { Root, RootContent, PhrasingContent, ListItem } from "mdast";
 import { normalizeNote } from "@/lib/markdown-normalize";
 
 const MONO = "Consolas";
+const MATH_NS = "http://schemas.openxmlformats.org/officeDocument/2006/math";
 const CODE_SHADING = { type: ShadingType.CLEAR, fill: "F1F5F9" } as const;
 
 const HEADING_BY_DEPTH = [
@@ -55,10 +51,171 @@ const HEADING_BY_DEPTH = [
 
 type Marks = { bold?: boolean; italics?: boolean; strike?: boolean };
 
-/**
- * KaTeX emits MathML wrapped in a `<span>`, with the original TeX carried along
- * in an `<annotation>` that the OMML converter has no equivalent for.
- */
+// `<mphantom>` is laid out but never drawn. The converter has no equivalent and
+// emits the children instead, so mhchem's `\ce{H2O}` (which spaces its subscript
+// off a phantom X) came out of Word as "HX2O".
+export const cleanMathml = (mathml: string) =>
+  mathml
+    .replace(/<annotation[\s\S]*?<\/annotation>/g, "")
+    .replace(/<mphantom\b[^>]*>[\s\S]*?<\/mphantom>/g, "");
+
+// mathvariant="normal" (every `\mathrm`, and mhchem's upright letters) has no
+// entry in the converter's style table, so it writes a literal
+// `m:val="undefined"`. Word accepts only p, b, i or bi and rejects the file.
+export const repairOmml = (omml: string) =>
+  omml.replace(/(<m:sty\b[^>]*m:val=")undefined(")/g, "$1p$2");
+
+// The converter copies `<` and `&` into `<m:t>` as they came, so `|r| < 1` left a
+// bare `<` in the XML. The parse then failed and the formula fell back to plain
+// text.
+export const escapeMathText = (omml: string) =>
+  omml.replace(
+    /(<m:t\b[^>]*>)([\s\S]*?)(<\/m:t>)/g,
+    (_, open: string, text: string, close: string) =>
+      open +
+      text
+        .replace(/&(?!(?:[A-Za-z][A-Za-z0-9]*|#\d+|#x[0-9A-Fa-f]+);)/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;") +
+      close
+  );
+
+// The top-level elements of an XML fragment, in order.
+function splitChildren(inner: string): string[] {
+  const chunks: string[] = [];
+  const tag = /<(\/?)([A-Za-z_][\w:.-]*)[^>]*?(\/?)>/g;
+  let depth = 0;
+  let start = 0;
+
+  for (let match = tag.exec(inner); match; match = tag.exec(inner)) {
+    if (depth === 0) start = match.index;
+
+    if (match[3]) {
+      if (depth === 0) chunks.push(match[0]);
+    } else if (match[1]) {
+      depth -= 1;
+      if (depth === 0) chunks.push(inner.slice(start, tag.lastIndex));
+    } else {
+      depth += 1;
+    }
+  }
+
+  return chunks;
+}
+
+const EMPTY_NARY = /^<m:nary>[\s\S]*<m:e\/><\/m:nary>$/;
+// Dropping mhchem's phantom leaves the subscript with no base, which Word draws
+// as an empty box. In `\ce{H2O}` the base is the run before it.
+const EMPTY_BASE = /^<m:(?:sSub|sSup|sSubSup)>(?:<m:s\w+Pr(?:\/>|>[\s\S]*?<\/m:s\w+Pr>))?<m:e\/>/;
+const RUN_TEXT = /^(<m:r>[\s\S]*?)(<m:t\b[^>]*>)([\s\S]*?)(<\/m:t><\/m:r>)$/;
+// Where a summand ends: the next relation, or the `+`/`-` starting the next term.
+// Anything tighter (products, fractions, powers) stays under the sign.
+const OPERAND_END = /&lt;|&gt;|[=≠≤≥≈≡→⇒↔+,−±∓-]/;
+
+// How much of the next sibling belongs under the operator: -1 for all of it, 0 for
+// none, otherwise the offset in its text to cut at.
+function operandCut(chunk: string, first: boolean): number {
+  const parts = RUN_TEXT.exec(chunk);
+  if (!parts) return -1;
+
+  // A leading sign belongs to the operand, not to the next term.
+  const from = first && /^[+−±∓-]/.test(parts[3]) ? 1 : 0;
+  const at = parts[3].slice(from).search(OPERAND_END);
+
+  return at < 0 ? -1 : from + at;
+}
+
+function splitRun(chunk: string, at: number): [string, string] {
+  const [, head, open, text, close] = RUN_TEXT.exec(chunk)!;
+  return [head + open + text.slice(0, at) + close, head + open + text.slice(at) + close];
+}
+
+// Presentation MathML has nowhere to put a sum's operand, so KaTeX leaves `r^n` as
+// the sigma's neighbour and the converter emits `<m:nary>` with an empty `<m:e/>`.
+// Word then draws a full-size sigma with an empty box and the operand outside it.
+export function fillNaryBodies(inner: string): string {
+  const chunks = splitChildren(inner);
+  // Anything the split missed is text, not markup, so leave the fragment alone.
+  if (chunks.join("") !== inner) return inner;
+
+  const out: string[] = [];
+
+  for (let index = 0; index < chunks.length; index += 1) {
+    if (!EMPTY_NARY.test(chunks[index])) {
+      const base =
+        EMPTY_BASE.test(chunks[index]) && out.at(-1)?.startsWith("<m:r>")
+          ? out.pop()
+          : null;
+
+      out.push(
+        descend(
+          base
+            ? chunks[index].replace("<m:e/>", `<m:e>${base}</m:e>`)
+            : chunks[index]
+        )
+      );
+      continue;
+    }
+
+    const nary = chunks[index];
+    const body: string[] = [];
+
+    while (index + 1 < chunks.length) {
+      const cut = operandCut(chunks[index + 1], body.length === 0);
+      if (cut === 0) break;
+
+      if (cut > 0) {
+        const [head, tail] = splitRun(chunks[index + 1], cut);
+        body.push(head);
+        chunks[index + 1] = tail;
+        break;
+      }
+
+      body.push(chunks[index + 1]);
+      index += 1;
+    }
+
+    out.push(
+      descend(
+        nary.replace(
+          /<m:e\/><\/m:nary>$/,
+          `<m:e>${body.join("")}</m:e></m:nary>`
+        )
+      )
+    );
+  }
+
+  return out.join("");
+}
+
+// Runs the same pass over an element's own children.
+function descend(element: string): string {
+  const open = /^<([A-Za-z_][\w:.-]*)[^>]*?>/.exec(element);
+  if (!open || element.endsWith("/>") || open[1] === "m:t") return element;
+
+  const inner = element.slice(open[0].length, -(open[1].length + 3));
+  return `${open[0]}${fillNaryBodies(inner)}</${open[1]}>`;
+}
+
+// `fromXmlString` hands back the XML document node, not the element inside it.
+// Its rootKey is undefined, which writes a literal `<undefined>` around the
+// equation, and Word drops it as unreadable. The element wanted is its only child.
+export function importXml(xml: string): ImportedXmlComponent | null {
+  const document = ImportedXmlComponent.fromXmlString(xml) as unknown as {
+    root?: unknown[];
+  };
+
+  return (
+    document.root?.find(
+      (child): child is ImportedXmlComponent =>
+        child instanceof ImportedXmlComponent
+    ) ?? null
+  );
+}
+
+// KaTeX wraps its MathML in a `<span>` and carries the original TeX in an
+// `<annotation>` the converter cannot use. Display formulas get a further
+// `m:oMathPara` wrap, which is what puts the equation on its own line in Word.
 function texToOmml(tex: string, displayMode: boolean) {
   const rendered = katex.renderToString(tex, {
     output: "mathml",
@@ -71,16 +228,21 @@ function texToOmml(tex: string, displayMode: boolean) {
   if (!mathml) return null;
 
   try {
-    const omml = mml2omml(
-      mathml.replace(/<annotation[\s\S]*?<\/annotation>/g, "")
+    const omml = fillNaryBodies(
+      repairOmml(escapeMathText(mml2omml(cleanMathml(mathml))))
     );
-    return ImportedXmlComponent.fromXmlString(omml);
+
+    return importXml(
+      displayMode
+        ? `<m:oMathPara xmlns:m="${MATH_NS}"><m:oMathParaPr><m:jc m:val="center"/></m:oMathParaPr>${omml}</m:oMathPara>`
+        : omml
+    );
   } catch {
     return null;
   }
 }
 
-/** Formulas Word cannot represent still have to reach the page as something. */
+// Formulas Word cannot represent still have to reach the page as something.
 const texFallback = (tex: string) =>
   new TextRun({ text: tex, font: MONO, italics: true });
 
@@ -287,7 +449,7 @@ function tableToDocx(node: Extract<RootContent, { type: "table" }>) {
   });
 }
 
-/** Builds the .docx and hands back a blob ready to be saved. */
+// Builds the .docx and hands back a blob ready to be saved.
 export async function noteToDocxBlob(
   title: string,
   markdown: string
