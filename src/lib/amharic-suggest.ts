@@ -106,6 +106,24 @@ export function suggestWords(
   return matches.slice(0, limit).map((match) => match.word);
 }
 
+// Runs of non-boundary characters, which is what a word is here.
+const WORD_RUN = /[^\s።፣፤፥፦፧፨,.!?;:()[\]{}"'`]+/g;
+
+// Words the user has finished with, for reporting back to the shared list. The
+// one under the cursor is skipped: it is still being typed, so it is as likely
+// to be half a word as a whole one.
+export function completedWords(text: string, cursor: number): string[] {
+  const words: string[] = [];
+
+  for (const match of text.matchAll(WORD_RUN)) {
+    const start = match.index;
+    if (cursor > start && cursor <= start + match[0].length) continue;
+    if (isAmharicWord(match[0])) words.push(match[0]);
+  }
+
+  return words;
+}
+
 /**
  * Puts `word` in place of the fragment, followed by a space unless the text
  * already carries on with one.

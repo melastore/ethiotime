@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 
 import { AMHARIC_WORDS } from "./amharic-words.ts";
 import {
+  completedWords,
   fidelBase,
   replaceWord,
   skeleton,
@@ -113,5 +114,24 @@ describe("AMHARIC_WORDS", () => {
   it("is all fidel", () => {
     const stray = AMHARIC_WORDS.filter((word) => !/^[ሀ-፿ ]+$/.test(word));
     assert.deepEqual(stray, []);
+  });
+});
+
+describe("completedWords", () => {
+  it("skips the word under the cursor", () => {
+    // Cursor sits inside ሰላ, which is on its way to ሰላም.
+    assert.deepEqual(completedWords("ጤና ሰላ", 5), ["ጤና"]);
+  });
+
+  it("takes the word once the cursor has left it", () => {
+    assert.deepEqual(completedWords("ጤና ሰላም", 0), ["ጤና", "ሰላም"]);
+  });
+
+  it("ignores anything that is not Amharic", () => {
+    assert.deepEqual(completedWords("hello ሰላም!", 0), ["ሰላም"]);
+  });
+
+  it("splits on Ethiopic punctuation", () => {
+    assert.deepEqual(completedWords("ሰላም። ጤና", 0), ["ሰላም", "ጤና"]);
   });
 });

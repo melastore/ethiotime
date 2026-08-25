@@ -2,14 +2,28 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ChangeEvent,
+  type KeyboardEvent,
 } from "react";
+import {
+  completedWords,
+  replaceWord,
+  suggestWords,
+  wordAt,
+} from "@/lib/amharic-suggest";
 import {
   amharicTransliterate,
   singleCharInsertion,
 } from "@/lib/amharicTransliterate";
+import {
+  flushQueuedWords,
+  loadDictionary,
+  queueWord,
+  syncDictionary,
+} from "@/lib/word-store";
 import { readText, writeText } from "@/lib/storage";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -24,12 +38,17 @@ import { Copy, Languages, Sparkles, Type } from "lucide-react";
 
 const STORAGE_KEY = "ethiotime-amharic-text";
 const COPY_FEEDBACK_MS = 2000;
+// Long enough that words are reported once the sentence has settled, not on
+// every keystroke.
+const REPORT_DELAY_MS = 2500;
 
 type CopyState = "idle" | "success" | "error";
 
 const AmharicKeyboard = () => {
   const [text, setText] = useState("");
   const [copyState, setCopyState] = useState<CopyState>("idle");
+  const [cursor, setCursor] = useState(0);
+  const [dictionary, setDictionary] = useState<readonly string[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const lastKeyPressTimeRef = useRef(0);
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -55,6 +74,72 @@ const AmharicKeyboard = () => {
     };
   }, []);
 
+  // The bundled list is enough to suggest from straight away; anything synced
+  // from the shared dictionary is layered on when it arrives.
+  useEffect(() => {
+    let cancelled = false;
+
+    loadDictionary().then((words) => {
+      if (!cancelled) setDictionary(words);
+    });
+
+    syncDictionary().then((added) => {
+      if (added > 0) loadDictionary().then((words) => {
+        if (!cancelled) setDictionary(words);
+      });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const suggestions = useMemo(() => {
+    const fragment = wordAt(text, cursor).text;
+    return fragment ? suggestWords(fragment, 6, dictionary) : [];
+  }, [text, cursor, dictionary]);
+
+  // Words are reported after a pause rather than as they are typed: one request
+  // for a sentence instead of one per keystroke.
+  useEffect(() => {
+    if (!text) return;
+
+    const timer = window.setTimeout(() => {
+      for (const word of completedWords(text, cursor)) queueWord(word);
+      flushQueuedWords();
+    }, REPORT_DELAY_MS);
+
+    return () => window.clearTimeout(timer);
+  }, [text, cursor]);
+
+  const applySuggestion = useCallback(
+    (word: string) => {
+      const span = wordAt(text, cursor);
+      const next = replaceWord(text, span, word);
+
+      pendingCursorRef.current = next.cursor;
+      setCursor(next.cursor);
+      setText(next.text);
+      textareaRef.current?.focus();
+    },
+    [text, cursor]
+  );
+
+  // Tab takes the first suggestion. Enter is left alone: it is a newline here.
+  const handleKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLTextAreaElement>) => {
+      if (event.key !== "Tab" || suggestions.length === 0) return;
+
+      event.preventDefault();
+      applySuggestion(suggestions[0]);
+    },
+    [applySuggestion, suggestions]
+  );
+
+  const syncCursor = useCallback((event: { currentTarget: HTMLTextAreaElement }) => {
+    setCursor(event.currentTarget.selectionStart);
+  }, []);
+
   // The cursor has to be restored after React has committed the new value,
   // otherwise the browser parks it at the end of the textarea.
   useEffect(() => {
@@ -78,6 +163,7 @@ const AmharicKeyboard = () => {
 
       const edit = singleCharInsertion(previousValue, nextValue);
       if (!edit) {
+        setCursor(event.target.selectionStart);
         setText(nextValue);
         return;
       }
@@ -95,6 +181,7 @@ const AmharicKeyboard = () => {
       );
 
       pendingCursorRef.current = newCursorPos;
+      setCursor(newCursorPos);
       setText(newText);
     },
     [text]
@@ -171,9 +258,41 @@ const AmharicKeyboard = () => {
             className="min-h-[300px] w-full resize-y rounded-2xl border-slate-200/80 bg-white/85 p-4 text-base leading-relaxed shadow-inner dark:border-slate-700/80 dark:bg-slate-900/70"
             value={text}
             onChange={handleChange}
+            onKeyDown={handleKeyDown}
+            onKeyUp={syncCursor}
+            onClick={syncCursor}
+            onSelect={syncCursor}
             placeholder="Start typing in English to see Amharic..."
             aria-label="Amharic text area"
           />
+
+          {suggestions.length > 0 && (
+            <div
+              className="-mt-1 flex flex-wrap items-center gap-1.5"
+              role="listbox"
+              aria-label="Word suggestions"
+            >
+              <Sparkles
+                className="h-3.5 w-3.5 shrink-0 text-teal-500"
+                aria-hidden="true"
+              />
+              {suggestions.map((word, index) => (
+                <button
+                  key={word}
+                  type="button"
+                  role="option"
+                  aria-selected={index === 0}
+                  onClick={() => applySuggestion(word)}
+                  className="rounded-full border border-teal-200 bg-teal-50 px-3 py-1 text-sm font-semibold text-teal-800 transition-colors hover:bg-teal-100 dark:border-teal-900/60 dark:bg-teal-950/30 dark:text-teal-200 dark:hover:bg-teal-900/40"
+                >
+                  {word}
+                </button>
+              ))}
+              <span className="ml-1 hidden text-[11px] font-medium text-slate-400 sm:inline">
+                Tab for the first
+              </span>
+            </div>
+          )}
           <div className="flex flex-wrap items-center justify-end gap-2">
             <Button
               onClick={handleClear}

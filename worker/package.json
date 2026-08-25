@@ -9,7 +9,7 @@
     "test": "node --test \"src/**/*.test.ts\""
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20250801.0",
+    "@cloudflare/workers-types": "^5.20260820.1",
     "typescript": "^5",
     "wrangler": "^4"
   }
