@@ -7,6 +7,7 @@ import { Sidebar } from "@/components/layout/sidebar";
 import { CommandPaletteProvider } from "@/components/providers/command-palette-provider";
 import { LanguageProvider } from "@/components/providers/language-provider";
 import { ThemeProvider } from "@/components/providers/theme-provider";
+import { SyncProvider } from "@/components/providers/sync-provider";
 import { BASE_PATH, asset } from "@/lib/base-path";
 import { themeBootstrapScript } from "@/lib/theme";
 
@@ -112,6 +113,7 @@ export default function RootLayout({
         <ThemeProvider>
           <LanguageProvider>
             <CommandPaletteProvider>
+              <SyncProvider />
               <a
                 href="#main-content"
                 className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-lg focus:bg-teal-600 focus:px-3 focus:py-2 focus:text-sm focus:font-bold focus:text-white"

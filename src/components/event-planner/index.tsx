@@ -512,7 +512,9 @@ export default function EventPlanner() {
       // Keep id and createdAt: the notified-keys are built from the id.
       setEvents((previous) =>
         previous.map((event) =>
-          event.id === editingId ? { ...event, ...body } : event
+          event.id === editingId
+            ? { ...event, ...body, updatedAt: Date.now() }
+            : event
         )
       );
       pushAlert(isAmharic ? "ተስተካክሏል።" : `Updated “${body.title}”.`);

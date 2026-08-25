@@ -18,6 +18,8 @@ import {
 } from "./telegram.ts";
 import { armScheduler, ReminderScheduler } from "./scheduler.ts";
 import { contributeWords, listWords } from "./words.ts";
+import { accountInfo, createAccount, deleteAccount } from "./account.ts";
+import { listVersions, pull, push, readVersion } from "./sync.ts";
 
 export { ReminderScheduler };
 
@@ -41,6 +43,15 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (method === "DELETE" && path.startsWith("/api/notes/")) {
     return deleteNote(path.slice("/api/notes/".length), request, env);
   }
+
+  if (method === "POST" && path === "/api/account") return createAccount(env);
+  if (method === "GET" && path === "/api/account") return accountInfo(request, env);
+  if (method === "DELETE" && path === "/api/account") return deleteAccount(request, env);
+
+  if (method === "GET" && path === "/api/sync") return pull(request, url, env);
+  if (method === "POST" && path === "/api/sync") return push(request, env);
+  if (method === "GET" && path === "/api/history") return listVersions(request, url, env);
+  if (method === "GET" && path === "/api/version") return readVersion(request, url, env);
 
   if (method === "POST" && path === "/api/planner/link") return startLink(request, env);
   if (method === "GET" && path === "/api/planner/link") return linkStatus(url, env);

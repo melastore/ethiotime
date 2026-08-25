@@ -1,4 +1,5 @@
 import type { ShareTtl } from "@/lib/note-share";
+import type { SyncRow } from "@/lib/sync";
 
 // The site is a static export with no server of its own, so anything that needs
 // to be stored off the device goes through the Cloudflare Worker in ../worker.
@@ -116,3 +117,45 @@ export const contributeWords = (words: string[]) =>
     method: "POST",
     body: JSON.stringify({ words }),
   });
+
+export type AccountInfo = {
+  createdAt: number;
+  items: number;
+  bytes: number;
+  versions: number;
+};
+
+export const createAccount = () =>
+  call<{ number: string; createdAt: number }>("/api/account", { method: "POST" });
+
+const asAccount = (number: string) => ({ headers: { "X-Account": number } });
+
+export const accountInfo = (number: string) =>
+  call<AccountInfo>("/api/account", asAccount(number));
+
+export const closeAccount = (number: string) =>
+  call<{ deleted: boolean }>("/api/account", { method: "DELETE", ...asAccount(number) });
+
+export const pullSync = (number: string, since: number) =>
+  call<{ now: number; items: SyncRow[] }>(`/api/sync?since=${since}`, asAccount(number));
+
+export const pushSync = (number: string, items: SyncRow[]) =>
+  call<{ written: number; now: number }>("/api/sync", {
+    method: "POST",
+    headers: { "X-Account": number },
+    body: JSON.stringify({ items }),
+  });
+
+export type NoteVersion = { savedAt: number; size: number };
+
+export const listVersions = (number: string, id: string) =>
+  call<{ versions: NoteVersion[] }>(
+    `/api/history?id=${encodeURIComponent(id)}`,
+    asAccount(number)
+  );
+
+export const readVersion = (number: string, id: string, savedAt: number) =>
+  call<{ savedAt: number; payload: string }>(
+    `/api/version?id=${encodeURIComponent(id)}&savedAt=${savedAt}`,
+    asAccount(number)
+  );

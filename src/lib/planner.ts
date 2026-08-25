@@ -21,6 +21,9 @@ export type PlannerEvent = {
   recurrence: RecurrenceRule;
   reminderMinutes: number;
   createdAt: number;
+  // Bumped on every edit. Without it a change made on one device cannot be told
+  // apart from the copy another device already had.
+  updatedAt?: number;
 };
 
 export type PlannerOccurrence = {
@@ -346,9 +349,10 @@ export const getNextOccurrence = (
 };
 
 export const normalizePlannerEvent = (
-  value: Omit<PlannerEvent, "id" | "createdAt">
+  value: Omit<PlannerEvent, "id" | "createdAt" | "updatedAt">
 ): PlannerEvent => ({
   ...value,
   id: crypto.randomUUID(),
   createdAt: Date.now(),
+  updatedAt: Date.now(),
 });

@@ -9,8 +9,8 @@ function cors(env, request) {
   const permitted = origin === allowed || LOCALHOST.test(origin) ? origin : allowed;
   return {
     "Access-Control-Allow-Origin": permitted,
-    "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type,X-Edit-Token",
+    "Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type,X-Edit-Token,X-Account",
     "Access-Control-Max-Age": "86400",
     Vary: "Origin"
   };
@@ -70,14 +70,29 @@ var secretToken = /* @__PURE__ */ __name(() => shortId(32), "secretToken");
 // src/notes.ts
 var MAX_CONTENT = 200 * 1024;
 var MAX_TITLE = 200;
-var NOTE_TTL_DAYS = 180;
+var TTL_MS = {
+  "5m": 5 * 6e4,
+  "1h": 60 * 6e4,
+  "1d": 864e5,
+  "1w": 7 * 864e5,
+  "1mo": 30 * 864e5
+};
+var DEFAULT_TTL = "1w";
+function ttlFrom(body) {
+  const key = body.ttl === void 0 ? DEFAULT_TTL : body.ttl;
+  if (typeof key !== "string" || !(key in TTL_MS)) {
+    throw new HttpError(400, "ttl must be one of " + Object.keys(TTL_MS).join(", "));
+  }
+  return TTL_MS[key];
+}
+__name(ttlFrom, "ttlFrom");
 async function createNote(request, env) {
   const body = await readJson(request, MAX_CONTENT + 8 * 1024);
   const title = typeof body.title === "string" ? body.title.slice(0, MAX_TITLE) : "";
   const content = requireString(body, "content", MAX_CONTENT);
   const now = Date.now();
   const editToken = secretToken();
-  const expiresAt = now + NOTE_TTL_DAYS * 864e5;
+  const expiresAt = now + ttlFrom(body);
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const id = shortId();
     try {
@@ -105,6 +120,17 @@ async function readNote(id, env) {
   return { row, counted };
 }
 __name(readNote, "readNote");
+async function setNoteExpiry(id, request, env) {
+  const token = request.headers.get("X-Edit-Token") ?? "";
+  if (!isShortId(id) || token.length === 0) throw new HttpError(404, "no such note");
+  const expiresAt = Date.now() + ttlFrom(await readJson(request, 1024));
+  const result = await env.DB.prepare(
+    "UPDATE notes SET expires_at = ? WHERE id = ? AND edit_token = ? AND (expires_at IS NULL OR expires_at > ?)"
+  ).bind(expiresAt, id, token, Date.now()).run();
+  if (result.meta.changes === 0) throw new HttpError(404, "no such note");
+  return json({ expiresAt });
+}
+__name(setNoteExpiry, "setNoteExpiry");
 async function deleteNote(id, request, env) {
   const token = request.headers.get("X-Edit-Token") ?? "";
   if (!isShortId(id) || token.length === 0) throw new HttpError(404, "no such note");
@@ -374,6 +400,215 @@ async function contributeWords(request, env) {
 }
 __name(contributeWords, "contributeWords");
 
+// src/account.ts
+var DIGITS = 16;
+function newAccountNumber() {
+  const bytes = new Uint8Array(DIGITS);
+  crypto.getRandomValues(bytes);
+  let number = "";
+  for (const byte of bytes) {
+    number += byte < 250 ? byte % 10 : Math.floor(Math.random() * 10);
+  }
+  return number;
+}
+__name(newAccountNumber, "newAccountNumber");
+var isAccountNumber = /* @__PURE__ */ __name((value) => value.length === DIGITS && /^\d+$/.test(value), "isAccountNumber");
+async function accountId(number) {
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(`ethiotime:${number}`)
+  );
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+__name(accountId, "accountId");
+async function requireAccount(request, env) {
+  const number = request.headers.get("X-Account") ?? "";
+  if (!isAccountNumber(number)) throw new HttpError(401, "no account");
+  const id = await accountId(number);
+  const row = await env.DB.prepare("SELECT id FROM accounts WHERE id = ?").bind(id).first();
+  if (!row) throw new HttpError(401, "no account");
+  env.DB.prepare("UPDATE accounts SET last_seen = ? WHERE id = ?").bind(Date.now(), id).run();
+  return id;
+}
+__name(requireAccount, "requireAccount");
+async function createAccount(env) {
+  const now = Date.now();
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const number = newAccountNumber();
+    try {
+      await env.DB.prepare(
+        "INSERT INTO accounts (id, created_at, last_seen) VALUES (?, ?, ?)"
+      ).bind(await accountId(number), now, now).run();
+      return json({ number, createdAt: now }, { status: 201 });
+    } catch (error) {
+      if (!String(error).includes("UNIQUE")) throw error;
+    }
+  }
+  throw new HttpError(503, "could not allocate an account");
+}
+__name(createAccount, "createAccount");
+async function accountInfo(request, env) {
+  const id = await requireAccount(request, env);
+  const account = await env.DB.prepare(
+    "SELECT created_at FROM accounts WHERE id = ?"
+  ).bind(id).first();
+  const stored = await env.DB.prepare(
+    "SELECT COUNT(*) AS items, COALESCE(SUM(LENGTH(payload)), 0) AS bytes FROM items WHERE account = ? AND payload IS NOT NULL"
+  ).bind(id).first();
+  const versions = await env.DB.prepare(
+    "SELECT COUNT(*) AS n FROM versions WHERE account = ?"
+  ).bind(id).first();
+  return json({
+    createdAt: account?.created_at ?? 0,
+    items: stored?.items ?? 0,
+    bytes: stored?.bytes ?? 0,
+    versions: versions?.n ?? 0
+  });
+}
+__name(accountInfo, "accountInfo");
+async function deleteAccount(request, env) {
+  const id = await requireAccount(request, env);
+  await env.DB.batch([
+    env.DB.prepare("DELETE FROM versions WHERE account = ?").bind(id),
+    env.DB.prepare("DELETE FROM items WHERE account = ?").bind(id),
+    env.DB.prepare("DELETE FROM accounts WHERE id = ?").bind(id)
+  ]);
+  return json({ deleted: true });
+}
+__name(deleteAccount, "deleteAccount");
+
+// src/sync.ts
+var MAX_PAYLOAD = 128 * 1024;
+var MAX_BATCH = 200;
+var BUCKETS = /* @__PURE__ */ new Set([
+  "notes",
+  "planner-events",
+  "focus-sessions",
+  "settings",
+  "words"
+]);
+var VERSIONED = "notes";
+function readItems(body) {
+  const raw = body.items;
+  if (!Array.isArray(raw)) throw new HttpError(400, "items must be an array");
+  if (raw.length > MAX_BATCH) throw new HttpError(413, "too many items at once");
+  return raw.map((entry) => {
+    const item = entry;
+    const bucket = item.bucket;
+    const id = item.id;
+    const payload = item.payload ?? null;
+    const updatedAt = item.updatedAt;
+    if (typeof bucket !== "string" || !BUCKETS.has(bucket)) {
+      throw new HttpError(400, "unknown bucket");
+    }
+    if (typeof id !== "string" || id.length === 0 || id.length > 200) {
+      throw new HttpError(400, "bad id");
+    }
+    if (payload !== null && typeof payload !== "string") {
+      throw new HttpError(400, "payload must be a string or null");
+    }
+    if (payload !== null && payload.length > MAX_PAYLOAD) {
+      throw new HttpError(413, "payload too large");
+    }
+    if (typeof updatedAt !== "number" || !Number.isFinite(updatedAt)) {
+      throw new HttpError(400, "bad updatedAt");
+    }
+    return { bucket, id, payload, updatedAt };
+  });
+}
+__name(readItems, "readItems");
+async function pull(request, url, env) {
+  const account = await requireAccount(request, env);
+  const since = Number(url.searchParams.get("since") ?? 0);
+  const { results } = await env.DB.prepare(
+    "SELECT bucket, id, payload, updated_at FROM items WHERE account = ? AND updated_at > ? ORDER BY updated_at LIMIT 2000"
+  ).bind(account, Number.isFinite(since) ? since : 0).all();
+  return json({
+    now: Date.now(),
+    items: results.map((row) => ({
+      bucket: row.bucket,
+      id: row.id,
+      payload: row.payload,
+      updatedAt: row.updated_at
+    }))
+  });
+}
+__name(pull, "pull");
+async function push(request, env) {
+  const account = await requireAccount(request, env);
+  const items = readItems(await readJson(request, MAX_PAYLOAD * 4));
+  if (items.length === 0) return json({ written: 0, now: Date.now() });
+  const statements = items.map(
+    (item) => env.DB.prepare(
+      `INSERT INTO items (account, bucket, id, payload, updated_at)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT (account, bucket, id) DO UPDATE SET
+         payload = excluded.payload,
+         updated_at = excluded.updated_at
+       WHERE excluded.updated_at > items.updated_at`
+    ).bind(account, item.bucket, item.id, item.payload, item.updatedAt)
+  );
+  for (const item of items) {
+    if (item.bucket !== VERSIONED || item.payload === null) continue;
+    statements.push(
+      env.DB.prepare(
+        "INSERT OR IGNORE INTO versions (account, id, saved_at, payload) VALUES (?, ?, ?, ?)"
+      ).bind(account, item.id, item.updatedAt, item.payload)
+    );
+  }
+  const results = await env.DB.batch(statements);
+  const written = results.reduce((total, result) => total + result.meta.changes, 0);
+  for (const item of items) {
+    if (item.bucket === VERSIONED && item.payload !== null) {
+      await thin(account, item.id, env);
+    }
+  }
+  return json({ written, now: Date.now() });
+}
+__name(push, "push");
+async function thin(account, id, env) {
+  const now = Date.now();
+  const hour = 36e5;
+  const day = 864e5;
+  await env.DB.prepare(
+    `DELETE FROM versions
+     WHERE account = ? AND id = ? AND saved_at NOT IN (
+       SELECT MAX(saved_at) FROM versions
+       WHERE account = ? AND id = ?
+       GROUP BY CASE
+         WHEN saved_at > ? THEN saved_at
+         WHEN saved_at > ? THEN saved_at / ?
+         WHEN saved_at > ? THEN saved_at / ?
+         ELSE 0
+       END
+     )`
+  ).bind(account, id, account, id, now - day, now - 7 * day, hour, now - 30 * day, day).run();
+}
+__name(thin, "thin");
+async function listVersions(request, url, env) {
+  const account = await requireAccount(request, env);
+  const id = url.searchParams.get("id") ?? "";
+  if (id.length === 0) throw new HttpError(400, "id is required");
+  const { results } = await env.DB.prepare(
+    "SELECT saved_at, LENGTH(payload) AS size FROM versions WHERE account = ? AND id = ? ORDER BY saved_at DESC LIMIT 200"
+  ).bind(account, id).all();
+  return json({
+    versions: results.map((row) => ({ savedAt: row.saved_at, size: row.size }))
+  });
+}
+__name(listVersions, "listVersions");
+async function readVersion(request, url, env) {
+  const account = await requireAccount(request, env);
+  const id = url.searchParams.get("id") ?? "";
+  const savedAt = Number(url.searchParams.get("savedAt") ?? 0);
+  const row = await env.DB.prepare(
+    "SELECT payload FROM versions WHERE account = ? AND id = ? AND saved_at = ?"
+  ).bind(account, id, savedAt).first();
+  if (!row) throw new HttpError(404, "no such version");
+  return json({ savedAt, payload: row.payload });
+}
+__name(readVersion, "readVersion");
+
 // src/index.ts
 async function route(request, env) {
   const url = new URL(request.url);
@@ -385,9 +620,19 @@ async function route(request, env) {
     await counted;
     return json({ title: row.title, content: row.content, createdAt: row.created_at });
   }
+  if (method === "PATCH" && path.startsWith("/api/notes/")) {
+    return setNoteExpiry(path.slice("/api/notes/".length), request, env);
+  }
   if (method === "DELETE" && path.startsWith("/api/notes/")) {
     return deleteNote(path.slice("/api/notes/".length), request, env);
   }
+  if (method === "POST" && path === "/api/account") return createAccount(env);
+  if (method === "GET" && path === "/api/account") return accountInfo(request, env);
+  if (method === "DELETE" && path === "/api/account") return deleteAccount(request, env);
+  if (method === "GET" && path === "/api/sync") return pull(request, url, env);
+  if (method === "POST" && path === "/api/sync") return push(request, env);
+  if (method === "GET" && path === "/api/history") return listVersions(request, url, env);
+  if (method === "GET" && path === "/api/version") return readVersion(request, url, env);
   if (method === "POST" && path === "/api/planner/link") return startLink(request, env);
   if (method === "GET" && path === "/api/planner/link") return linkStatus(url, env);
   if (method === "DELETE" && path === "/api/planner/link") return unlink(request, env);

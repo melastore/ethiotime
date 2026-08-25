@@ -61,3 +61,36 @@ CREATE TABLE IF NOT EXISTS words (
 );
 
 CREATE INDEX IF NOT EXISTS words_added ON words (added_at);
+
+-- An account is a 16-digit number and nothing else: no email, no password, no
+-- way back if it is lost. Only its hash is stored, so a copy of this table is
+-- not a list of working credentials.
+CREATE TABLE IF NOT EXISTS accounts (
+  id         TEXT PRIMARY KEY,
+  created_at INTEGER NOT NULL,
+  last_seen  INTEGER NOT NULL
+);
+
+-- Everything an account syncs, whatever tool it came from. The app's own shapes
+-- stay inside payload, so a new tool needs a bucket name and no new table. A
+-- null payload is a tombstone: the record was deleted at updated_at.
+CREATE TABLE IF NOT EXISTS items (
+  account    TEXT NOT NULL,
+  bucket     TEXT NOT NULL,
+  id         TEXT NOT NULL,
+  payload    TEXT,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY (account, bucket, id)
+);
+
+CREATE INDEX IF NOT EXISTS items_since ON items (account, updated_at);
+
+-- Past versions of a note. Thinned by age on write rather than swept on a
+-- timer, so the cost is paid by whoever is making the versions.
+CREATE TABLE IF NOT EXISTS versions (
+  account  TEXT NOT NULL,
+  id       TEXT NOT NULL,
+  saved_at INTEGER NOT NULL,
+  payload  TEXT NOT NULL,
+  PRIMARY KEY (account, id, saved_at)
+);

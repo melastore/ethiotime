@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { House } from "lucide-react";
+import { House, UserRound } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 import { CommandTrigger } from "@/components/layout/command-trigger";
@@ -104,7 +104,20 @@ export function Sidebar() {
             })}
           </nav>
 
-          <ThemeToggle className="mt-3 shrink-0" />
+          <Link
+            href="/account"
+            className={cn(
+              "mt-3 flex shrink-0 items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-semibold transition-colors",
+              isCurrent("/account")
+                ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900"
+                : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+            )}
+          >
+            <UserRound className="h-4 w-4 shrink-0" aria-hidden="true" />
+            {language === "am" ? "መለያ" : "Account"}
+          </Link>
+
+          <ThemeToggle className="mt-2 shrink-0" />
         </div>
       </aside>
 
