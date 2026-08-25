@@ -230,6 +230,16 @@ export async function sendDueReminders(env: Env) {
       continue;
     }
 
+    // Anything else that failed is left unsent so the next tick retries it.
+    // Marking it sent regardless made a rejected message look delivered, which
+    // is the one outcome with no way back.
+    if (!response.ok) {
+      console.error(
+        `sendMessage ${response.status} for ${row.id}: ${await response.text()}`
+      );
+      continue;
+    }
+
     await env.DB.prepare("UPDATE reminders SET sent_at = ? WHERE id = ?")
       .bind(Date.now(), row.id)
       .run();
