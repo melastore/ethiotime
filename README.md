@@ -18,7 +18,24 @@ planned events — keep it in the browser rather than on a server.
 | Holiday Guide | Ethiopian public holidays, their dates and background |
 
 The interface is available in English and Amharic, and the app is installable as a PWA with an
-offline fallback.
+offline fallback. It follows the system light/dark setting unless you pick one, and the choice is
+remembered on the device.
+
+## Command palette
+
+`Ctrl K` (`⌘K` on a Mac), or `/` anywhere outside a text field, opens a palette that answers rather
+than just navigates:
+
+| You type | You get |
+| --- | --- |
+| `1/1/2017` | Both readings of the date, Ethiopian and Gregorian, ranked by the likelier one |
+| `meskerem 1 2018` | The Gregorian date and weekday; Enter opens it in the converter |
+| `11 sep 2025`, `today`, `ነገ` | The same, from the other direction |
+| `selam` | ሰላም, ready to copy |
+| `fasika` | The day the feast next falls on, in both calendars |
+| `dark`, `language` | The theme and language controls |
+
+The rules behind it live in `src/lib/command-answers.ts` and are unit tested.
 
 ## Running it
 
