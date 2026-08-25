@@ -3,12 +3,17 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import {
   BookOpen,
+  Check,
   Code2,
+  Copy,
   Download,
   FileText,
+  Hash,
   NotebookPen,
+  Pencil,
   Printer,
   Search,
+  Share2,
   Sigma,
   Star,
   Table2,
@@ -16,8 +21,23 @@ import {
   X,
 } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { MarkdownView } from "@/components/note-taking/markdown-lazy";
 import { NoteReader } from "@/components/note-taking/note-reader";
+import { hasApi, shareNote, unshareNote } from "@/lib/api";
+import {
+  forgetShare,
+  loadShares,
+  rememberShare,
+  type ShareRecord,
+} from "@/lib/note-share";
 import { previewOf } from "@/lib/markdown-preview";
 import {
   NOTES_STORAGE_KEY,
@@ -29,6 +49,13 @@ import { writeJson } from "@/lib/storage";
 import { cn } from "@/lib/utils";
 
 type NotesTab = "all" | "favorites";
+
+const EYEBROW =
+  "text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400";
+
+/** Icon button in a note's action row. */
+const ICON_BUTTON =
+  "rounded-xl p-2 text-slate-500 transition-colors dark:text-slate-400";
 
 /** Long notes are cut short until the reader asks for more. */
 const COLLAPSED_HEIGHT = "max-h-[11rem]";
@@ -163,13 +190,13 @@ function NoteBody({
         )}
       </div>
 
-      <div className="mt-1.5 flex items-center gap-3">
+      <div className="mt-2.5 flex items-center gap-1.5">
         {canExpand && (
           <button
             type="button"
             onClick={handleToggle}
             aria-expanded={isExpanded}
-            className="text-xs font-semibold text-teal-600 transition-colors hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300"
+            className="rounded-full bg-teal-50 px-3 py-1 text-xs font-bold text-teal-700 transition-colors hover:bg-teal-100 dark:bg-teal-950/50 dark:text-teal-300 dark:hover:bg-teal-950"
           >
             {isExpanded ? "Show less" : "Show more"}
           </button>
@@ -177,7 +204,7 @@ function NoteBody({
         <button
           type="button"
           onClick={onRead}
-          className="inline-flex items-center gap-1 text-xs font-medium text-slate-400 transition-colors hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-200"
+          className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
         >
           <BookOpen className="h-3.5 w-3.5" aria-hidden="true" />
           Read
@@ -209,7 +236,14 @@ export default function NoteTaking() {
   const [printNote, setPrintNote] = useState<Note | null>(null);
   const [exportingId, setExportingId] = useState<string | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [shares, setShares] = useState<Record<string, ShareRecord>>({});
+  const [sharingId, setSharingId] = useState<string | null>(null);
+  const [shareNoteId, setShareNoteId] = useState<string | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
 
   const toggleExpanded = (id: string) => {
     setExpandedIds((current) => {
@@ -235,12 +269,46 @@ export default function NoteTaking() {
 
   useEffect(() => {
     setNotes(loadNotes());
+    setShares(loadShares());
     setIsMounted(true);
   }, []);
 
   useEffect(() => {
     if (isMounted) writeJson(NOTES_STORAGE_KEY, notes);
   }, [notes, isMounted]);
+
+  useEffect(() => {
+    if (!copiedId) return;
+    const timer = window.setTimeout(() => setCopiedId(null), 1600);
+    return () => window.clearTimeout(timer);
+  }, [copiedId]);
+
+  // "/" to search, "n" to write. Ignored while typing so they stay out of the way.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+
+      const target = event.target as HTMLElement | null;
+      if (
+        target?.isContentEditable ||
+        ["INPUT", "TEXTAREA", "SELECT"].includes(target?.tagName ?? "")
+      ) {
+        return;
+      }
+
+      if (event.key === "/") {
+        event.preventDefault();
+        searchRef.current?.focus();
+      }
+      if (event.key === "n") {
+        event.preventDefault();
+        composerRef.current?.focus();
+      }
+    };
+
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   // Keeps the "5m ago" stamps honest without re-rendering constantly.
   useEffect(() => {
@@ -274,7 +342,9 @@ export default function NoteTaking() {
         if (activeTab === "favorites" && !note.isFavorite) return false;
         if (activeTag && !note.tags.includes(activeTag)) return false;
         if (!query) return true;
-        return `${note.title} ${note.content}`.toLowerCase().includes(query);
+        return `${note.title} ${note.content} ${note.tags.join(" ")}`
+          .toLowerCase()
+          .includes(query);
       })
       .sort((a, b) => {
         if (a.isFavorite !== b.isFavorite) return a.isFavorite ? -1 : 1;
@@ -292,6 +362,59 @@ export default function NoteTaking() {
       new Blob([note.content], { type: "text/markdown;charset=utf-8" }),
       `${slugify(noteHeading(note))}.md`
     );
+  };
+
+  // Shared links are stored per note, so re-sharing the same note reuses its
+  // link instead of leaving a trail of dead ones.
+  const share = async (note: Note) => {
+    const existing = shares[note.id];
+    if (existing) {
+      setShareNoteId(note.id);
+      return;
+    }
+
+    setSharingId(note.id);
+    setExportError(null);
+
+    try {
+      const result = await shareNote(noteHeading(note), note.content);
+      setShares(rememberShare(note.id, result));
+      setShareNoteId(note.id);
+    } catch (error) {
+      setExportError(
+        error instanceof Error ? error.message : "Could not share that note."
+      );
+    } finally {
+      setSharingId(null);
+    }
+  };
+
+  const stopSharing = async (noteId: string) => {
+    const record = shares[noteId];
+    if (!record) return;
+
+    setSharingId(noteId);
+
+    try {
+      await unshareNote(record.id, record.editToken);
+    } catch {
+      // Already gone from the server, or unreachable. Either way the link is of
+      // no further use to this device.
+    } finally {
+      setShares(forgetShare(noteId));
+      setShareNoteId(null);
+      setSharingId(null);
+    }
+  };
+
+  const copyLink = async (url: string) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setLinkCopied(true);
+      window.setTimeout(() => setLinkCopied(false), 2000);
+    } catch {
+      setExportError("Could not copy the link. Select it and copy by hand.");
+    }
   };
 
   const exportDocx = async (note: Note) => {
@@ -394,8 +517,23 @@ export default function NoteTaking() {
     );
   };
 
+  const copyNote = async (note: Note) => {
+    try {
+      await navigator.clipboard.writeText(note.content);
+      setCopiedId(note.id);
+    } catch {
+      setExportError("Could not copy that note to the clipboard.");
+    }
+  };
+
+  // Two taps. Deleting was immediate and there is no undo.
   const deleteNote = (id: string) => {
+    if (confirmDeleteId !== id) {
+      setConfirmDeleteId(id);
+      return;
+    }
     setNotes((previous) => previous.filter((note) => note.id !== id));
+    setConfirmDeleteId(null);
     if (editingId === id) cancelEditing();
   };
 
@@ -420,32 +558,45 @@ export default function NoteTaking() {
             "lg:grid lg:grid-cols-[minmax(0,1fr)_17rem] lg:items-start lg:gap-x-8"
         )}
       >
-        <header className="mb-5 flex items-end justify-between gap-4 lg:col-start-1 lg:row-start-1">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
-              Notes
-            </h1>
-            <p className="mt-1.5 text-sm text-slate-600 dark:text-slate-400">
-              Markdown, LaTeX and code, saved on this device. Export to Word or
-              PDF.
-            </p>
-          </div>
+        <header className="mb-5 lg:col-start-1 lg:row-start-1">
+          <p className={EYEBROW}>Notes</p>
+          <h1 className="mt-1.5 text-3xl font-black tracking-tight text-slate-900 sm:text-4xl dark:text-white">
+            Everything, in one place
+          </h1>
+          <p className="mt-2 max-w-xl text-sm text-slate-600 sm:text-base dark:text-slate-400">
+            Markdown, LaTeX and code, saved on this device. Export to Word or PDF.
+          </p>
+
           {isMounted && notes.length > 0 && (
-            <span className="shrink-0 pb-1 text-sm tabular-nums text-slate-400 dark:text-slate-500">
-              {notes.length}
-            </span>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              {[
+                { value: notes.length, label: notes.length === 1 ? "note" : "notes" },
+                { value: notes.filter((note) => note.isFavorite).length, label: "starred" },
+                { value: allTags.length, label: allTags.length === 1 ? "tag" : "tags" },
+              ].map((stat) => (
+                <span
+                  key={stat.label}
+                  className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+                >
+                  <span className="tabular-nums">{stat.value}</span>{" "}
+                  <span className="font-semibold text-slate-500 dark:text-slate-400">
+                    {stat.label}
+                  </span>
+                </span>
+              ))}
+            </div>
           )}
         </header>
 
         {/* Composer — a single line until it is being used. */}
         <div
           className={cn(
-            "rounded-2xl border bg-white transition-colors lg:col-start-1 lg:row-start-2 dark:bg-slate-900",
+            "overflow-hidden rounded-3xl border-2 bg-white shadow-sm transition-all duration-200 lg:col-start-1 lg:row-start-2 dark:bg-slate-900",
             editingId
-              ? "border-teal-500 dark:border-teal-600"
+              ? "border-teal-500 ring-4 ring-teal-500/15 dark:border-teal-500"
               : isComposerOpen
-                ? "border-slate-300 dark:border-slate-700"
-                : "border-slate-200 dark:border-slate-800"
+                ? "border-slate-300 shadow-md dark:border-slate-600"
+                : "border-slate-200 hover:border-slate-300 dark:border-slate-800 dark:hover:border-slate-700"
           )}
         >
           {isPreview ? (
@@ -453,7 +604,7 @@ export default function NoteTaking() {
               {draft.trim() ? (
                 <MarkdownView content={draft} />
               ) : (
-                <p className="text-sm text-slate-400">Nothing to preview yet.</p>
+                <p className="text-sm text-slate-500">Nothing to preview yet.</p>
               )}
             </div>
           ) : (
@@ -467,7 +618,7 @@ export default function NoteTaking() {
               onKeyDown={handleComposerKeyDown}
               placeholder="Write a note…  **bold**, $E=mc^2$, ```python"
               aria-label={editingId ? "Edit note" : "Write a new note"}
-              className="scrollbar-slim block max-h-80 min-h-[3rem] w-full resize-none overflow-y-auto bg-transparent px-4 py-3.5 font-mono text-[14px] leading-relaxed text-slate-900 outline-none placeholder:font-sans placeholder:text-slate-400 dark:text-slate-100"
+              className="scrollbar-slim block max-h-80 min-h-[3rem] w-full resize-none overflow-y-auto bg-transparent px-4 py-3.5 font-mono text-[14px] leading-relaxed text-slate-900 outline-none placeholder:font-sans placeholder:text-slate-500 dark:text-slate-100"
             />
           )}
 
@@ -502,7 +653,7 @@ export default function NoteTaking() {
                     title={label}
                     disabled={isPreview}
                     onClick={() => insertSnippet(args[0], args[1], args[2])}
-                    className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-900 disabled:opacity-30 dark:hover:bg-slate-800 dark:hover:text-slate-100"
+                    className="rounded-xl p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 disabled:opacity-30 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white"
                   >
                     <Icon className="h-4 w-4" aria-hidden="true" />
                     <span className="sr-only">{label}</span>
@@ -514,18 +665,25 @@ export default function NoteTaking() {
                   onClick={() => setIsPreview((value) => !value)}
                   aria-pressed={isPreview}
                   className={cn(
-                    "ml-1 rounded-md px-2 py-1 text-xs font-medium transition-colors",
+                    "ml-1 rounded-full px-3 py-1.5 text-xs font-bold transition-colors",
                     isPreview
-                      ? "bg-teal-600 text-white"
-                      : "text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
+                      ? "bg-gradient-to-br from-teal-500 to-emerald-600 text-white shadow-sm"
+                      : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
                   )}
                 >
                   Preview
                 </button>
               </div>
 
-              <span className="ml-auto hidden pl-1 text-xs text-slate-400 sm:inline dark:text-slate-500">
-                {editingId ? "Editing · Esc to cancel" : "Ctrl + Enter to save"}
+              <span className="ml-auto hidden items-center gap-2 pl-1 text-xs text-slate-500 sm:inline-flex dark:text-slate-400">
+                {draft.trim() && (
+                  <span className="tabular-nums">
+                    {draft.trim().split(/\s+/).length} words
+                  </span>
+                )}
+                <span>
+                  {editingId ? "Editing · Esc to cancel" : "Ctrl + Enter to save"}
+                </span>
               </span>
               <div className="flex items-center gap-1.5">
                 {editingId && (
@@ -541,7 +699,7 @@ export default function NoteTaking() {
                   type="button"
                   onClick={saveDraft}
                   disabled={!draft.trim()}
-                  className="rounded-lg bg-teal-600 px-4 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="rounded-full bg-gradient-to-br from-teal-500 to-emerald-600 px-5 py-2 text-sm font-black text-white shadow-sm transition-transform hover:scale-[1.03] disabled:cursor-not-allowed disabled:from-slate-300 disabled:to-slate-400 disabled:shadow-none dark:disabled:from-slate-700 dark:disabled:to-slate-700"
                 >
                   {editingId ? "Update" : "Save"}
                 </button>
@@ -557,19 +715,37 @@ export default function NoteTaking() {
             <div className="flex items-center gap-2 lg:flex-col lg:items-stretch">
               <div className="relative min-w-0 flex-1">
                 <Search
-                  className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+                  className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500"
                   aria-hidden="true"
                 />
                 <input
+                  ref={searchRef}
                   value={searchQuery}
                   onChange={(event) => setSearchQuery(event.target.value)}
                   placeholder="Search notes"
                   aria-label="Search notes"
-                  className="h-9 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-900 outline-none transition-colors focus:border-teal-600 focus:ring-2 focus:ring-teal-600/20 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
+                  className="h-11 w-full rounded-2xl border-2 border-slate-200 bg-white pl-9 pr-9 text-sm font-semibold text-slate-900 outline-none transition-colors focus:border-teal-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
                 />
+                {searchQuery ? (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery("")}
+                    aria-label="Clear search"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-1 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-slate-800 dark:hover:text-white"
+                  >
+                    <X className="h-3.5 w-3.5" aria-hidden="true" />
+                  </button>
+                ) : (
+                  <kbd
+                    aria-hidden="true"
+                    className="pointer-events-none absolute right-2.5 top-1/2 hidden -translate-y-1/2 rounded border border-slate-200 px-1.5 py-0.5 font-sans text-[10px] font-bold text-slate-500 lg:block dark:border-slate-700 dark:text-slate-400"
+                  >
+                    /
+                  </kbd>
+                )}
               </div>
 
-              <div className="inline-flex shrink-0 rounded-lg bg-slate-100 p-0.5 lg:w-full dark:bg-slate-800">
+              <div className="inline-flex shrink-0 rounded-2xl bg-slate-100 p-1 lg:w-full dark:bg-slate-800/60">
                 {(["all", "favorites"] as const).map((tab) => (
                   <button
                     key={tab}
@@ -577,10 +753,10 @@ export default function NoteTaking() {
                     onClick={() => setActiveTab(tab)}
                     aria-pressed={activeTab === tab}
                     className={cn(
-                      "rounded-md px-3 py-1.5 text-sm font-medium capitalize transition-colors lg:flex-1",
+                      "rounded-xl px-3 py-2 text-sm font-bold capitalize transition-colors lg:flex-1",
                       activeTab === tab
                         ? "bg-white text-slate-900 shadow-sm dark:bg-slate-950 dark:text-white"
-                        : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
+                        : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
                     )}
                   >
                     {tab}
@@ -602,10 +778,10 @@ export default function NoteTaking() {
                       onClick={() => setActiveTag(isActive ? null : tag)}
                       aria-pressed={isActive}
                       className={cn(
-                        "inline-flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-xs transition-colors",
+                        "inline-flex shrink-0 items-center gap-1 rounded-full border-2 px-3 py-1.5 text-xs font-bold transition-colors",
                         isActive
-                          ? "border-teal-600 bg-teal-600 text-white"
-                          : "border-slate-200 text-slate-600 hover:border-teal-500 hover:text-teal-700 dark:border-slate-800 dark:text-slate-400 dark:hover:text-teal-400"
+                          ? "border-transparent bg-gradient-to-br from-teal-500 to-emerald-600 text-white shadow-sm"
+                          : "border-slate-200 text-slate-600 hover:border-teal-400 hover:text-teal-700 dark:border-slate-700 dark:text-slate-300 dark:hover:border-teal-500 dark:hover:text-teal-400"
                       )}
                     >
                       #{tag}
@@ -614,7 +790,7 @@ export default function NoteTaking() {
                           "tabular-nums",
                           isActive
                             ? "text-teal-100"
-                            : "text-slate-400 dark:text-slate-600"
+                            : "text-slate-500 dark:text-slate-600"
                         )}
                       >
                         {count}
@@ -636,50 +812,119 @@ export default function NoteTaking() {
               aria-hidden="true"
             />
           ) : visibleNotes.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-slate-300 px-5 py-12 text-center dark:border-slate-800">
-              <NotebookPen
-                className="mx-auto h-7 w-7 text-slate-300 dark:text-slate-600"
+            <div className="rounded-3xl border-2 border-dashed border-slate-300 px-5 py-14 text-center dark:border-slate-700">
+              <span
                 aria-hidden="true"
-              />
-              <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
+                className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br from-teal-500 to-emerald-600 text-white shadow-lg"
+              >
+                <NotebookPen className="h-6 w-6" />
+              </span>
+              <p className="mt-4 text-base font-bold text-slate-800 dark:text-slate-100">
+                {notes.length === 0 ? "Nothing written yet" : "No matches"}
+              </p>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
                 {notes.length === 0
-                  ? "No notes yet. Write your first one above."
-                  : "Nothing matches those filters."}
+                  ? "Write your first note above. Press n to jump to it."
+                  : "Try a different search or clear the filters."}
               </p>
             </div>
           ) : (
             /* Clamped cards keep a bounded height, so a wide screen can show two
                columns without the ragged gaps a masonry layout would leave. */
             <ul className="grid gap-2.5 xl:grid-cols-2">
-              {visibleNotes.map((note) => (
+              {visibleNotes.map((note, index) => (
                 <li
                   key={note.id}
+                  /* Capped so a long list does not trickle in for seconds. */
+                  style={{ animationDelay: `${Math.min(index, 8) * 45}ms` }}
                   className={cn(
-                    "group flex flex-col rounded-2xl border bg-white transition-colors dark:bg-slate-900",
+                    "animate-rise group flex flex-col rounded-3xl border-2 bg-white shadow-sm",
+                    "transition-[transform,box-shadow,border-color] duration-200",
+                    "hover:-translate-y-0.5 hover:shadow-lg dark:bg-slate-900",
                     expandedIds.has(note.id)
                       ? "px-5 py-4 sm:px-7 sm:py-6 xl:col-span-2"
-                      : "px-4 py-3",
+                      : "px-4 py-3.5",
                     note.isFavorite
-                      ? "border-amber-200 dark:border-amber-500/30"
-                      : "border-slate-200 hover:border-slate-300 dark:border-slate-800 dark:hover:border-slate-700"
+                      ? "border-amber-300 bg-gradient-to-br from-amber-50/60 to-transparent dark:border-amber-500/40 dark:from-amber-950/20"
+                      : "border-slate-200 hover:border-teal-300 dark:border-slate-800 dark:hover:border-teal-700"
                   )}
                 >
-                  <div className="mb-1.5 flex items-center justify-between gap-3">
-                    <time
-                      className="text-xs text-slate-400 dark:text-slate-500"
-                      dateTime={new Date(note.updatedAt).toISOString()}
-                    >
-                      {relativeTime(note.updatedAt, now)}
-                    </time>
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <time
+                        className="shrink-0 text-xs font-bold text-slate-500 dark:text-slate-400"
+                        dateTime={new Date(note.updatedAt).toISOString()}
+                      >
+                        {relativeTime(note.updatedAt, now)}
+                      </time>
+                      {note.tags.slice(0, 2).map((tag) => (
+                        <button
+                          key={tag}
+                          type="button"
+                          onClick={() => setActiveTag(activeTag === tag ? null : tag)}
+                          className="inline-flex shrink-0 items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-600 transition-colors hover:bg-teal-100 hover:text-teal-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-teal-950 dark:hover:text-teal-300"
+                        >
+                          <Hash className="mr-0.5 h-2.5 w-2.5" aria-hidden="true" />
+                          {tag}
+                        </button>
+                      ))}
+                    </div>
 
                     {/* Always visible: hover-only controls are unreachable on touch. */}
-                    <div className="-mr-1.5 flex items-center gap-0.5">
+                    <div className="-mr-1 flex shrink-0 items-center gap-0.5">
+                      <button
+                        type="button"
+                        title="Copy Markdown"
+                        onClick={() => copyNote(note)}
+                        className={cn(
+                          ICON_BUTTON,
+                          copiedId === note.id
+                            ? "text-teal-600 dark:text-teal-400"
+                            : "hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-slate-800 dark:hover:text-white"
+                        )}
+                      >
+                        {copiedId === note.id ? (
+                          <Check className="h-4 w-4" aria-hidden="true" />
+                        ) : (
+                          <Copy className="h-4 w-4" aria-hidden="true" />
+                        )}
+                        <span className="sr-only">
+                          {copiedId === note.id ? "Copied" : "Copy Markdown"}
+                        </span>
+                      </button>
+                      {hasApi() && (
+                        <button
+                          type="button"
+                          title={
+                            shares[note.id]
+                              ? "Shared: show the link"
+                              : "Share with a link"
+                          }
+                          disabled={sharingId === note.id}
+                          onClick={() => share(note)}
+                          className={cn(
+                            ICON_BUTTON,
+                            "hover:bg-slate-100 disabled:animate-pulse dark:hover:bg-slate-800",
+                            shares[note.id]
+                              ? "text-emerald-600 dark:text-emerald-400"
+                              : "hover:text-emerald-600 dark:hover:text-emerald-400"
+                          )}
+                        >
+                          <Share2 className="h-4 w-4" aria-hidden="true" />
+                          <span className="sr-only">
+                            {shares[note.id] ? "Shared" : "Share"}
+                          </span>
+                        </button>
+                      )}
                       <button
                         type="button"
                         title="Export as Word (.docx)"
                         disabled={exportingId === note.id}
                         onClick={() => exportDocx(note)}
-                        className="rounded-md p-1.5 text-slate-300 transition-colors hover:bg-slate-100 hover:text-blue-600 disabled:animate-pulse dark:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-blue-400"
+                        className={cn(
+                          ICON_BUTTON,
+                          "hover:bg-slate-100 hover:text-blue-600 disabled:animate-pulse dark:hover:bg-slate-800 dark:hover:text-blue-400"
+                        )}
                       >
                         <Download className="h-4 w-4" aria-hidden="true" />
                         <span className="sr-only">Export as Word</span>
@@ -688,7 +933,10 @@ export default function NoteTaking() {
                         type="button"
                         title="Export as PDF"
                         onClick={() => setPrintNote(note)}
-                        className="rounded-md p-1.5 text-slate-300 transition-colors hover:bg-slate-100 hover:text-rose-600 dark:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-rose-400"
+                        className={cn(
+                          ICON_BUTTON,
+                          "hover:bg-slate-100 hover:text-rose-600 dark:hover:bg-slate-800 dark:hover:text-rose-400"
+                        )}
                       >
                         <Printer className="h-4 w-4" aria-hidden="true" />
                         <span className="sr-only">Export as PDF</span>
@@ -697,14 +945,17 @@ export default function NoteTaking() {
                         type="button"
                         title="Download Markdown (.md)"
                         onClick={() => exportMarkdown(note)}
-                        className="rounded-md p-1.5 text-slate-300 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-100"
+                        className={cn(
+                          ICON_BUTTON,
+                          "hidden hover:bg-slate-100 hover:text-slate-900 sm:block dark:hover:bg-slate-800 dark:hover:text-white"
+                        )}
                       >
                         <FileText className="h-4 w-4" aria-hidden="true" />
                         <span className="sr-only">Download Markdown</span>
                       </button>
 
                       <span
-                        className="mx-0.5 h-4 w-px bg-slate-200 dark:bg-slate-700"
+                        className="mx-1 h-5 w-px bg-slate-200 dark:bg-slate-700"
                         aria-hidden="true"
                       />
 
@@ -712,12 +963,16 @@ export default function NoteTaking() {
                         type="button"
                         onClick={() => toggleFavorite(note.id)}
                         aria-pressed={note.isFavorite}
-                        className="rounded-md p-1.5 text-slate-300 transition-colors hover:bg-slate-100 hover:text-amber-500 dark:text-slate-600 dark:hover:bg-slate-800"
+                        className={cn(
+                          ICON_BUTTON,
+                          "hover:bg-amber-50 hover:text-amber-500 dark:hover:bg-amber-950/30"
+                        )}
                       >
                         <Star
                           className={cn(
-                            "h-4 w-4",
-                            note.isFavorite && "fill-amber-400 text-amber-400"
+                            "h-4 w-4 transition-transform",
+                            note.isFavorite &&
+                              "scale-110 fill-amber-400 text-amber-400"
                           )}
                           aria-hidden="true"
                         />
@@ -729,18 +984,40 @@ export default function NoteTaking() {
                       </button>
                       <button
                         type="button"
+                        title="Edit"
                         onClick={() => startEditing(note)}
-                        className="rounded-md px-2 py-1.5 text-xs font-medium text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:text-slate-500 dark:hover:bg-slate-800 dark:hover:text-slate-100"
+                        className={cn(
+                          ICON_BUTTON,
+                          "hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-slate-800 dark:hover:text-white"
+                        )}
                       >
-                        Edit
+                        <Pencil className="h-4 w-4" aria-hidden="true" />
+                        <span className="sr-only">Edit note</span>
                       </button>
                       <button
                         type="button"
                         onClick={() => deleteNote(note.id)}
-                        className="rounded-md p-1.5 text-slate-300 transition-colors hover:bg-rose-50 hover:text-rose-600 dark:text-slate-600 dark:hover:bg-rose-950/40 dark:hover:text-rose-400"
+                        onBlur={() => setConfirmDeleteId(null)}
+                        title={
+                          confirmDeleteId === note.id ? "Tap again to delete" : "Delete"
+                        }
+                        className={cn(
+                          "rounded-xl p-2 transition-colors",
+                          confirmDeleteId === note.id
+                            ? "bg-rose-600 text-white"
+                            : "text-slate-500 hover:bg-rose-50 hover:text-rose-600 dark:text-slate-400 dark:hover:bg-rose-950/40 dark:hover:text-rose-400"
+                        )}
                       >
-                        <Trash2 className="h-4 w-4" aria-hidden="true" />
-                        <span className="sr-only">Delete note</span>
+                        {confirmDeleteId === note.id ? (
+                          <Check className="h-4 w-4" aria-hidden="true" />
+                        ) : (
+                          <Trash2 className="h-4 w-4" aria-hidden="true" />
+                        )}
+                        <span className="sr-only">
+                          {confirmDeleteId === note.id
+                            ? "Confirm delete"
+                            : "Delete note"}
+                        </span>
                       </button>
                     </div>
                   </div>
@@ -765,6 +1042,56 @@ export default function NoteTaking() {
           content={readerNote.content}
           onClose={() => setReaderNote(null)}
         />
+      )}
+
+      {shareNoteId && shares[shareNoteId] && (
+        <Dialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setShareNoteId(null);
+          }}
+        >
+          <DialogContent className="sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Anyone with this link can read the note</DialogTitle>
+              <DialogDescription>
+                It stops working on{" "}
+                {new Date(shares[shareNoteId].expiresAt).toLocaleDateString()}, or
+                when you stop sharing.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="flex items-center gap-2">
+              <input
+                readOnly
+                value={shares[shareNoteId].url}
+                onFocus={(event) => event.currentTarget.select()}
+                className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-sm dark:border-slate-700 dark:bg-slate-900"
+              />
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => copyLink(shares[shareNoteId].url)}
+              >
+                {linkCopied ? (
+                  <Check className="h-4 w-4" aria-hidden="true" />
+                ) : (
+                  <Copy className="h-4 w-4" aria-hidden="true" />
+                )}
+                {linkCopied ? "Copied" : "Copy"}
+              </Button>
+            </div>
+
+            <button
+              type="button"
+              disabled={sharingId === shareNoteId}
+              onClick={() => stopSharing(shareNoteId)}
+              className="self-start text-sm font-medium text-rose-600 hover:underline disabled:opacity-50 dark:text-rose-400"
+            >
+              Stop sharing
+            </button>
+          </DialogContent>
+        </Dialog>
       )}
 
       {exportError && (

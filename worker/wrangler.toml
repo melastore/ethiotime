@@ -1,0 +1,22 @@
+name = "ethiotime-api"
+main = "src/index.ts"
+compatibility_date = "2025-08-01"
+
+# Reminders are checked every five minutes; a reminder fires at the first tick
+# past its time, so the worst case is five minutes late.
+[triggers]
+crons = ["*/5 * * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "ethiotime"
+database_id = "00000000-0000-0000-0000-000000000000"  # replace after `wrangler d1 create`
+
+[vars]
+# The static site on Pages. Short links redirect here and CORS is limited to it.
+APP_URL = "https://melastore.github.io/ethiotime"
+TELEGRAM_BOT = "ethiotime_bot"
+
+# Set with `wrangler secret put`:
+#   TELEGRAM_TOKEN         bot token from @BotFather
+#   TELEGRAM_WEBHOOK_SECRET  any random string, passed to setWebhook

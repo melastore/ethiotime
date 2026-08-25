@@ -18,6 +18,8 @@ const eslintConfig = [
       "out/**",
       "build/**",
       "next-env.d.ts",
+      // The Worker is its own project with its own tsconfig.
+      "worker/**",
     ],
   },
 ];
