@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { House, UserRound } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
+import { AccountTrigger } from "@/components/layout/account-trigger";
 import { CommandTrigger } from "@/components/layout/command-trigger";
 import { MobileDock } from "@/components/layout/mobile-dock";
 import { EthiopianNow } from "@/components/layout/ethiopian-now";
@@ -132,13 +133,14 @@ export function Sidebar() {
               className="h-8 w-8"
               priority
             />
-            <span className="text-sm font-extrabold tracking-tight text-slate-900 dark:text-slate-100">
+            <span className="hidden text-sm font-extrabold tracking-tight text-slate-900 min-[380px]:inline dark:text-slate-100">
               EthioTime
             </span>
           </Link>
           <div className="flex items-center gap-2">
             <ThemeToggle compact />
             <CommandTrigger compact />
+            <AccountTrigger />
           </div>
         </div>
       </div>
