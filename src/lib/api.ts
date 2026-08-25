@@ -1,3 +1,5 @@
+import type { ShareTtl } from "@/lib/note-share";
+
 // The site is a static export with no server of its own, so anything that needs
 // to be stored off the device goes through the Cloudflare Worker in ../worker.
 // Unset means the build has no backend: every caller here treats that as
@@ -43,10 +45,18 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
 export type SharedNote = { title: string; content: string; createdAt: number };
 export type ShareResult = { id: string; url: string; editToken: string; expiresAt: number };
 
-export const shareNote = (title: string, content: string) =>
+export const shareNote = (title: string, content: string, ttl: ShareTtl) =>
   call<ShareResult>("/api/notes", {
     method: "POST",
-    body: JSON.stringify({ title, content }),
+    body: JSON.stringify({ title, content, ttl }),
+  });
+
+// Changes how long an existing link lives without changing the link itself.
+export const setShareExpiry = (id: string, editToken: string, ttl: ShareTtl) =>
+  call<{ expiresAt: number }>(`/api/notes/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "X-Edit-Token": editToken },
+    body: JSON.stringify({ ttl }),
   });
 
 export const fetchSharedNote = (id: string) =>

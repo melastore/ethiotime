@@ -3,11 +3,26 @@
 
 import { readJson, writeJson } from "@/lib/storage";
 
+// How long a link may live. A month is the ceiling the worker enforces; these
+// are the same keys it accepts.
+export const TTL_CHOICES = [
+  { id: "5m", label: "5 min" },
+  { id: "1h", label: "1 hour" },
+  { id: "1d", label: "1 day" },
+  { id: "1w", label: "1 week" },
+  { id: "1mo", label: "1 month" },
+] as const;
+
+export type ShareTtl = (typeof TTL_CHOICES)[number]["id"];
+
+export const DEFAULT_TTL: ShareTtl = "1w";
+
 export type ShareRecord = {
   id: string;
   url: string;
   editToken: string;
   expiresAt: number;
+  ttl?: ShareTtl;
 };
 
 const KEY = "shared-note-links";

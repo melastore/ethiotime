@@ -32,12 +32,15 @@ import {
 } from "@/components/ui/dialog";
 import { MarkdownView } from "@/components/note-taking/markdown-lazy";
 import { NoteReader } from "@/components/note-taking/note-reader";
-import { hasApi, shareNote, unshareNote } from "@/lib/api";
+import { hasApi, setShareExpiry, shareNote, unshareNote } from "@/lib/api";
 import {
+  DEFAULT_TTL,
   forgetShare,
   loadShares,
   rememberShare,
+  TTL_CHOICES,
   type ShareRecord,
+  type ShareTtl,
 } from "@/lib/note-share";
 import { previewOf } from "@/lib/markdown-preview";
 import {
@@ -64,10 +67,17 @@ const COLLAPSED_HEIGHT = "max-h-[11rem]";
 // A date on its own says nothing about how long is left, which is the part
 // people read an expiry for.
 function expiryLabel(expiresAt: number) {
-  const days = Math.ceil((expiresAt - Date.now()) / 86_400_000);
-  if (days <= 0) return "today";
-  if (days === 1) return "tomorrow";
-  return `in ${days} days`;
+  const left = expiresAt - Date.now();
+  if (left <= 0) return "any moment now";
+
+  const minutes = Math.round(left / 60_000);
+  if (minutes < 60) return `in ${minutes} min`;
+
+  const hours = Math.round(minutes / 60);
+  if (hours < 36) return hours === 1 ? "in an hour" : `in ${hours} hours`;
+
+  const days = Math.round(hours / 24);
+  return days === 1 ? "in a day" : `in ${days} days`;
 }
 
 const slugify = (value: string) =>
@@ -252,6 +262,7 @@ export default function NoteTaking() {
   const [shareNoteId, setShareNoteId] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
   const [confirmStop, setConfirmStop] = useState(false);
+  const [shareError, setShareError] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -382,6 +393,7 @@ export default function NoteTaking() {
   // link instead of leaving a trail of dead ones.
   const share = async (note: Note) => {
     setConfirmStop(false);
+    setShareError(null);
     const existing = shares[note.id];
     if (existing) {
       setShareNoteId(note.id);
@@ -392,8 +404,8 @@ export default function NoteTaking() {
     setExportError(null);
 
     try {
-      const result = await shareNote(noteHeading(note), note.content);
-      setShares(rememberShare(note.id, result));
+      const result = await shareNote(noteHeading(note), note.content, DEFAULT_TTL);
+      setShares(rememberShare(note.id, { ...result, ttl: DEFAULT_TTL }));
       setShareNoteId(note.id);
     } catch (error) {
       setExportError(
@@ -425,6 +437,25 @@ export default function NoteTaking() {
       setShares(forgetShare(noteId));
       setShareNoteId(null);
       setConfirmStop(false);
+      setSharingId(null);
+    }
+  };
+
+  const changeExpiry = async (noteId: string, ttl: ShareTtl) => {
+    const record = shares[noteId];
+    if (!record || record.ttl === ttl) return;
+
+    setSharingId(noteId);
+    setShareError(null);
+
+    try {
+      const { expiresAt } = await setShareExpiry(record.id, record.editToken, ttl);
+      setShares(rememberShare(noteId, { ...record, expiresAt, ttl }));
+    } catch (error) {
+      setShareError(
+        error instanceof Error ? error.message : "Could not change the expiry."
+      );
+    } finally {
       setSharingId(null);
     }
   };
@@ -1116,27 +1147,62 @@ export default function NoteTaking() {
             </DialogTitle>
 
             <div className="space-y-2 px-5 pb-4 pt-4">
-              <button
-                type="button"
-                onClick={() => copyLink(sharedLink.url)}
-                className="flex w-full items-center gap-2.5 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-left transition-colors hover:border-indigo-300 hover:bg-indigo-50 dark:border-slate-700 dark:bg-slate-800/60 dark:hover:border-indigo-500/50 dark:hover:bg-slate-800"
-              >
+              <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 py-2 pl-3 pr-2 dark:border-slate-700 dark:bg-slate-800/60">
                 <Link2
                   className="h-4 w-4 shrink-0 text-slate-400"
                   aria-hidden="true"
                 />
-                <span className="min-w-0 flex-1 truncate font-mono text-sm text-slate-700 dark:text-slate-200">
+                <span className="scrollbar-slim min-w-0 flex-1 overflow-x-auto whitespace-nowrap py-0.5 font-mono text-sm text-slate-700 dark:text-slate-200">
                   {sharedLink.url}
                 </span>
-                <span className="flex shrink-0 items-center gap-1 text-xs font-bold uppercase tracking-wide text-indigo-600 dark:text-indigo-400">
+                <button
+                  type="button"
+                  onClick={() => copyLink(sharedLink.url)}
+                  className="flex shrink-0 items-center gap-1 rounded-xl bg-indigo-600 px-2.5 py-1.5 text-xs font-bold uppercase tracking-wide text-white transition-colors hover:bg-indigo-700"
+                >
                   {linkCopied ? (
                     <Check className="h-3.5 w-3.5" aria-hidden="true" />
                   ) : (
                     <Copy className="h-3.5 w-3.5" aria-hidden="true" />
                   )}
                   {linkCopied ? "Copied" : "Copy"}
-                </span>
-              </button>
+                </button>
+              </div>
+
+              <div>
+                <p className={cn(EYEBROW, "mt-3")}>Expires</p>
+                <div className="scrollbar-slim mt-1.5 flex gap-1.5 overflow-x-auto pb-1">
+                  {TTL_CHOICES.map((choice) => {
+                    const isActive = sharedLink.ttl === choice.id;
+                    return (
+                      <button
+                        key={choice.id}
+                        type="button"
+                        aria-pressed={isActive}
+                        disabled={sharingId === shareNoteId}
+                        onClick={() => changeExpiry(shareNoteId, choice.id)}
+                        className={cn(
+                          "shrink-0 rounded-full border-2 px-3 py-1 text-xs font-bold transition-colors disabled:opacity-50",
+                          isActive
+                            ? "border-transparent bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-sm"
+                            : "border-slate-200 text-slate-600 hover:border-indigo-400 hover:text-indigo-700 dark:border-slate-700 dark:text-slate-300 dark:hover:border-indigo-500 dark:hover:text-indigo-400"
+                        )}
+                      >
+                        {choice.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {shareError && (
+                <p
+                  role="alert"
+                  className="rounded-xl bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 dark:bg-rose-950/40 dark:text-rose-300"
+                >
+                  {shareError}
+                </p>
+              )}
 
               {isMounted && typeof navigator.share === "function" && (
                 <Button

@@ -20,7 +20,7 @@ export function cors(env: Env, request: Request): Record<string, string> {
 
   return {
     "Access-Control-Allow-Origin": permitted,
-    "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
+    "Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type,X-Edit-Token",
     "Access-Control-Max-Age": "86400",
     Vary: "Origin",

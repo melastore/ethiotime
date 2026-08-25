@@ -3,9 +3,28 @@ import { isShortId, secretToken, shortId } from "./id.ts";
 
 const MAX_CONTENT = 200 * 1024;
 const MAX_TITLE = 200;
-// A shared link is a handoff, not storage. Notes older than this are swept up by
-// the cron job.
-export const NOTE_TTL_DAYS = 180;
+
+// A shared link is a handoff, not storage. A month is the ceiling, and the cron
+// job sweeps up whatever has run out.
+export const TTL_MS: Record<string, number> = {
+  "5m": 5 * 60_000,
+  "1h": 60 * 60_000,
+  "1d": 86_400_000,
+  "1w": 7 * 86_400_000,
+  "1mo": 30 * 86_400_000,
+};
+
+const DEFAULT_TTL = "1w";
+
+// An unknown value is refused rather than quietly given the default: a caller
+// asking for five minutes must not end up with a week.
+function ttlFrom(body: Record<string, unknown>): number {
+  const key = body.ttl === undefined ? DEFAULT_TTL : body.ttl;
+  if (typeof key !== "string" || !(key in TTL_MS)) {
+    throw new HttpError(400, "ttl must be one of " + Object.keys(TTL_MS).join(", "));
+  }
+  return TTL_MS[key];
+}
 
 type NoteRow = {
   title: string;
@@ -21,7 +40,7 @@ export async function createNote(request: Request, env: Env) {
 
   const now = Date.now();
   const editToken = secretToken();
-  const expiresAt = now + NOTE_TTL_DAYS * 86_400_000;
+  const expiresAt = now + ttlFrom(body);
 
   // Six characters is 57^6 ids, so a clash is rare but not impossible; take the
   // next one rather than overwriting somebody's note.
@@ -66,6 +85,22 @@ export async function readNote(id: string, env: Env) {
     .run();
 
   return { row, counted };
+}
+
+export async function setNoteExpiry(id: string, request: Request, env: Env) {
+  const token = request.headers.get("X-Edit-Token") ?? "";
+  if (!isShortId(id) || token.length === 0) throw new HttpError(404, "no such note");
+
+  const expiresAt = Date.now() + ttlFrom(await readJson(request, 1024));
+
+  const result = await env.DB.prepare(
+    "UPDATE notes SET expires_at = ? WHERE id = ? AND edit_token = ? AND (expires_at IS NULL OR expires_at > ?)"
+  )
+    .bind(expiresAt, id, token, Date.now())
+    .run();
+
+  if (result.meta.changes === 0) throw new HttpError(404, "no such note");
+  return json({ expiresAt });
 }
 
 export async function deleteNote(id: string, request: Request, env: Env) {

@@ -1,6 +1,12 @@
 import { cors, HttpError, json, type Env } from "./http.ts";
 import { isShortId } from "./id.ts";
-import { createNote, deleteNote, readNote, sweepNotes } from "./notes.ts";
+import {
+  createNote,
+  deleteNote,
+  readNote,
+  setNoteExpiry,
+  sweepNotes,
+} from "./notes.ts";
 import {
   linkStatus,
   putReminders,
@@ -26,6 +32,10 @@ async function route(request: Request, env: Env): Promise<Response> {
     const { row, counted } = await readNote(path.slice("/api/notes/".length), env);
     await counted;
     return json({ title: row.title, content: row.content, createdAt: row.created_at });
+  }
+
+  if (method === "PATCH" && path.startsWith("/api/notes/")) {
+    return setNoteExpiry(path.slice("/api/notes/".length), request, env);
   }
 
   if (method === "DELETE" && path.startsWith("/api/notes/")) {
