@@ -141,7 +141,11 @@ export function YearWheel({ className }: { className?: string }) {
                 fillOpacity={isShown ? 0.95 : isCurrent ? 0.6 : 0.3}
                 stroke="rgba(255,255,255,0.5)"
                 strokeWidth={1}
-                className="cursor-pointer transition-all duration-200"
+                // No outline: the browser draws it around the path's bounding
+                // box, which on a wedge is a rectangle covering half the wheel.
+                // Focus already grows the slice and brightens it, so the state
+                // stays visible without one.
+                className="cursor-pointer outline-none transition-all duration-200"
                 onMouseEnter={() => setActive(number)}
                 onFocus={() => setActive(number)}
                 tabIndex={0}
@@ -225,48 +229,55 @@ export function YearWheel({ className }: { className?: string }) {
       </svg>
 
       <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-        <div
-          key={shownMonth}
-          className="month-pop pointer-events-auto w-[58%] text-center"
-        >
-          <p
-            className="text-[10px] font-bold uppercase tracking-[0.18em]"
-            style={{ color: season.tint }}
+        {/* Clipped to the ring's inner circle, so a long feast name is cut by
+            the curve instead of crossing it. */}
+        <div className="flex aspect-square w-[54%] items-center justify-center overflow-hidden rounded-full">
+          <div
+            key={shownMonth}
+            className="month-pop pointer-events-auto w-[88%] text-center"
           >
-            {isAmharic ? season.amharic : season.english}
-          </p>
-          <p className="section-title mt-0.5 text-xl font-black leading-tight text-slate-900 dark:text-white">
-            {isAmharic ? month.amharic : month.label}
-          </p>
-          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-            {daysInEthiopianMonth(shownMonth, year)}{" "}
-            {isAmharic ? "ቀናት" : "days"}
-          </p>
-          {month.gregorianSpan && (
-            <p className="mt-0.5 text-[10px] text-slate-500 dark:text-slate-400">
-              {month.gregorianSpan}
+            <p
+              className="text-[10px] font-bold uppercase tracking-[0.18em]"
+              style={{ color: season.tint }}
+            >
+              {isAmharic ? season.amharic : season.english}
             </p>
-          )}
+            <p className="section-title mt-0.5 text-xl font-black leading-tight text-slate-900 dark:text-white">
+              {isAmharic ? month.amharic : month.label}
+              <span className="ml-1.5 text-sm font-bold text-slate-500 dark:text-slate-400">
+                {isAmharic ? month.label : month.amharic}
+              </span>
+            </p>
+            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+              {daysInEthiopianMonth(shownMonth, year)}{" "}
+              {isAmharic ? "ቀናት" : "days"}
+            </p>
+            {month.gregorianSpan && (
+              <p className="mt-0.5 text-[10px] text-slate-500 dark:text-slate-400">
+                {month.gregorianSpan}
+              </p>
+            )}
 
-          {monthHolidays.length > 0 && (
-            <ul className="mt-1.5 space-y-0.5">
-              {monthHolidays.slice(0, 2).map((entry) => (
-                <li key={entry.holiday.id}>
-                  <Link
-                    href={`/holidays?holiday=${entry.holiday.id}`}
-                    className="block truncate text-[11px] font-semibold text-amber-700 hover:underline dark:text-amber-300"
-                  >
-                    {isAmharic ? entry.holiday.amharic : entry.holiday.name}
-                  </Link>
-                </li>
-              ))}
-              {monthHolidays.length > 2 && (
-                <li className="text-[10px] text-slate-500 dark:text-slate-400">
-                  +{monthHolidays.length - 2} {isAmharic ? "ተጨማሪ" : "more"}
-                </li>
-              )}
-            </ul>
-          )}
+            {monthHolidays.length > 0 && (
+              <ul className="mt-1.5 space-y-0.5">
+                {monthHolidays.slice(0, 2).map((entry) => (
+                  <li key={entry.holiday.id}>
+                    <Link
+                      href={`/holidays?holiday=${entry.holiday.id}`}
+                      className="block truncate text-[11px] font-semibold text-amber-700 hover:underline dark:text-amber-300"
+                    >
+                      {isAmharic ? entry.holiday.amharic : entry.holiday.name}
+                    </Link>
+                  </li>
+                ))}
+                {monthHolidays.length > 2 && (
+                  <li className="text-[10px] text-slate-500 dark:text-slate-400">
+                    +{monthHolidays.length - 2} {isAmharic ? "ተጨማሪ" : "more"}
+                  </li>
+                )}
+              </ul>
+            )}
+          </div>
         </div>
       </div>
 

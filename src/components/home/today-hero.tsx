@@ -182,11 +182,13 @@ export function TodayHero() {
       </section>
 
       {/* The year: thirteen months, sized by the days in them. */}
-      <section className="glass-surface rounded-[2rem] p-6 sm:p-8">
+      <section className="glass-surface rounded-[2rem] p-5 sm:p-8">
         <h2 className="section-title text-lg font-black text-slate-900 dark:text-white">
           {t("home.yearTitle", "The thirteen months")}
         </h2>
-        <YearWheel className="mt-3" />
+        {/* Reaches past the card padding on a phone: the ring is the content,
+            and 40px of padding around it is 40px it does not have. */}
+        <YearWheel className="mt-3 -mx-4 sm:mx-0" />
       </section>
     </div>
   );
