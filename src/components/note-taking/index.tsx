@@ -9,10 +9,12 @@ import {
   Download,
   FileText,
   Hash,
+  Link2,
   NotebookPen,
   Pencil,
   Printer,
   Search,
+  Send,
   Share2,
   Sigma,
   Star,
@@ -24,9 +26,8 @@ import {
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
-  DialogDescription,
-  DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { MarkdownView } from "@/components/note-taking/markdown-lazy";
@@ -59,6 +60,15 @@ const ICON_BUTTON =
 
 /** Long notes are cut short until the reader asks for more. */
 const COLLAPSED_HEIGHT = "max-h-[11rem]";
+
+// A date on its own says nothing about how long is left, which is the part
+// people read an expiry for.
+function expiryLabel(expiresAt: number) {
+  const days = Math.ceil((expiresAt - Date.now()) / 86_400_000);
+  if (days <= 0) return "today";
+  if (days === 1) return "tomorrow";
+  return `in ${days} days`;
+}
 
 const slugify = (value: string) =>
   value
@@ -241,6 +251,7 @@ export default function NoteTaking() {
   const [sharingId, setSharingId] = useState<string | null>(null);
   const [shareNoteId, setShareNoteId] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [confirmStop, setConfirmStop] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -352,6 +363,9 @@ export default function NoteTaking() {
       });
   }, [notes, searchQuery, activeTab, activeTag]);
 
+  const sharedNote = notes.find((note) => note.id === shareNoteId);
+  const sharedLink = shareNoteId ? shares[shareNoteId] : undefined;
+
   const isComposerOpen = isComposerFocused || draft.length > 0 || isPreview;
   // The wide two-column layout only earns its place once there is a feed and a
   // filter rail to put in it.
@@ -367,6 +381,7 @@ export default function NoteTaking() {
   // Shared links are stored per note, so re-sharing the same note reuses its
   // link instead of leaving a trail of dead ones.
   const share = async (note: Note) => {
+    setConfirmStop(false);
     const existing = shares[note.id];
     if (existing) {
       setShareNoteId(note.id);
@@ -389,9 +404,15 @@ export default function NoteTaking() {
     }
   };
 
+  // Two taps, like deleting. The link cannot be brought back.
   const stopSharing = async (noteId: string) => {
     const record = shares[noteId];
     if (!record) return;
+
+    if (!confirmStop) {
+      setConfirmStop(true);
+      return;
+    }
 
     setSharingId(noteId);
 
@@ -403,6 +424,7 @@ export default function NoteTaking() {
     } finally {
       setShares(forgetShare(noteId));
       setShareNoteId(null);
+      setConfirmStop(false);
       setSharingId(null);
     }
   };
@@ -415,6 +437,12 @@ export default function NoteTaking() {
     } catch {
       setExportError("Could not copy the link. Select it and copy by hand.");
     }
+  };
+
+  // The phone share sheet, which is how a link like this usually travels. It
+  // rejects when the sheet is dismissed, which is not worth reporting.
+  const sendLink = (title: string, url: string) => {
+    navigator.share({ title, url }).catch(() => {});
   };
 
   const exportDocx = async (note: Note) => {
@@ -1044,52 +1072,105 @@ export default function NoteTaking() {
         />
       )}
 
-      {shareNoteId && shares[shareNoteId] && (
+      {shareNoteId && sharedNote && sharedLink && (
         <Dialog
           open
           onOpenChange={(open) => {
-            if (!open) setShareNoteId(null);
+            if (open) return;
+            setShareNoteId(null);
+            setConfirmStop(false);
           }}
         >
-          <DialogContent className="sm:max-w-lg">
-            <DialogHeader>
-              <DialogTitle>Anyone with this link can read the note</DialogTitle>
-              <DialogDescription>
-                It stops working on{" "}
-                {new Date(shares[shareNoteId].expiresAt).toLocaleDateString()}, or
-                when you stop sharing.
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="flex items-center gap-2">
-              <input
-                readOnly
-                value={shares[shareNoteId].url}
-                onFocus={(event) => event.currentTarget.select()}
-                className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-sm dark:border-slate-700 dark:bg-slate-900"
+          <DialogContent className="w-[92%] max-w-md overflow-hidden rounded-3xl border-none bg-white p-0 shadow-2xl outline-none [&>button]:hidden dark:bg-slate-900">
+            <div className="relative overflow-hidden bg-gradient-to-br from-indigo-500 via-violet-600 to-slate-900 px-5 pb-5 pt-4 text-white">
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute -right-16 -top-20 h-52 w-52 rounded-full bg-white/20 blur-3xl"
               />
-              <Button
-                type="button"
-                size="sm"
-                onClick={() => copyLink(shares[shareNoteId].url)}
-              >
-                {linkCopied ? (
-                  <Check className="h-4 w-4" aria-hidden="true" />
-                ) : (
-                  <Copy className="h-4 w-4" aria-hidden="true" />
-                )}
-                {linkCopied ? "Copied" : "Copy"}
-              </Button>
+
+              <DialogClose className="absolute right-3 top-3 z-10 rounded-full p-1.5 text-white/80 transition-colors hover:bg-white/20 hover:text-white">
+                <X className="h-4 w-4" aria-hidden="true" />
+                <span className="sr-only">Close</span>
+              </DialogClose>
+
+              <p className="relative text-[11px] font-bold uppercase tracking-[0.16em] text-white/70">
+                Shared link
+              </p>
+
+              <p className="relative mt-1.5 font-mono text-4xl font-black leading-none">
+                {sharedLink.id}
+              </p>
+
+              <p className="relative mt-2 truncate pr-8 text-sm font-semibold text-white/85">
+                {noteHeading(sharedNote)}
+              </p>
+
+              <p className="relative mt-3 border-t border-white/20 pt-2.5 text-sm text-white/75">
+                Anyone with the link can read it. Stops working{" "}
+                {expiryLabel(sharedLink.expiresAt)}.
+              </p>
             </div>
 
-            <button
-              type="button"
-              disabled={sharingId === shareNoteId}
-              onClick={() => stopSharing(shareNoteId)}
-              className="self-start text-sm font-medium text-rose-600 hover:underline disabled:opacity-50 dark:text-rose-400"
-            >
-              Stop sharing
-            </button>
+            <DialogTitle className="sr-only">
+              Share link {sharedLink.id}
+            </DialogTitle>
+
+            <div className="space-y-2 px-5 pb-4 pt-4">
+              <button
+                type="button"
+                onClick={() => copyLink(sharedLink.url)}
+                className="flex w-full items-center gap-2.5 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-left transition-colors hover:border-indigo-300 hover:bg-indigo-50 dark:border-slate-700 dark:bg-slate-800/60 dark:hover:border-indigo-500/50 dark:hover:bg-slate-800"
+              >
+                <Link2
+                  className="h-4 w-4 shrink-0 text-slate-400"
+                  aria-hidden="true"
+                />
+                <span className="min-w-0 flex-1 truncate font-mono text-sm text-slate-700 dark:text-slate-200">
+                  {sharedLink.url}
+                </span>
+                <span className="flex shrink-0 items-center gap-1 text-xs font-bold uppercase tracking-wide text-indigo-600 dark:text-indigo-400">
+                  {linkCopied ? (
+                    <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                  ) : (
+                    <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+                  )}
+                  {linkCopied ? "Copied" : "Copy"}
+                </span>
+              </button>
+
+              {isMounted && typeof navigator.share === "function" && (
+                <Button
+                  type="button"
+                  className="w-full"
+                  onClick={() => sendLink(noteHeading(sharedNote), sharedLink.url)}
+                >
+                  <Send className="h-4 w-4" aria-hidden="true" />
+                  Send it
+                </Button>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between gap-3 border-t border-slate-100 px-5 py-3 dark:border-slate-800">
+              <p className="min-w-0 text-xs text-slate-500 dark:text-slate-400">
+                {confirmStop
+                  ? "The link dies for good. Tap again."
+                  : "The note stays on this device either way."}
+              </p>
+
+              <button
+                type="button"
+                disabled={sharingId === shareNoteId}
+                onClick={() => stopSharing(shareNoteId)}
+                className={cn(
+                  "shrink-0 rounded-full px-3 py-1.5 text-sm font-semibold transition-colors disabled:opacity-50",
+                  confirmStop
+                    ? "bg-rose-600 text-white hover:bg-rose-700"
+                    : "text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/40"
+                )}
+              >
+                Stop sharing
+              </button>
+            </div>
           </DialogContent>
         </Dialog>
       )}
