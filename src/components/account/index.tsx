@@ -29,7 +29,12 @@ import {
   loadAccount,
   saveAccount,
 } from "@/lib/account";
-import { clearSyncState, prepareForSignIn, runSync } from "@/lib/sync-client";
+import {
+  clearSyncState,
+  lastSyncedAt,
+  prepareForSignIn,
+  runSync,
+} from "@/lib/sync-client";
 import { cn } from "@/lib/utils";
 
 const EYEBROW =
@@ -37,6 +42,20 @@ const EYEBROW =
 
 const CARD =
   "rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900";
+
+// How long ago, said the way someone checking on a sync would ask it.
+const sinceLabel = (at: number) => {
+  const seconds = Math.round((Date.now() - at) / 1000);
+  if (seconds < 10) return "just now";
+  if (seconds < 60) return `${seconds} seconds ago`;
+
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return minutes === 1 ? "a minute ago" : `${minutes} minutes ago`;
+
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return hours === 1 ? "an hour ago" : `${hours} hours ago`;
+  return new Date(at).toLocaleString();
+};
 
 const formatBytes = (bytes: number) => {
   if (bytes < 1024) return `${bytes} B`;
@@ -57,10 +76,17 @@ export default function AccountPanel() {
   const [status, setStatus] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
+  const [syncedAt, setSyncedAt] = useState(0);
 
   useEffect(() => {
     setMounted(true);
     setAccount(loadAccount());
+    setSyncedAt(lastSyncedAt());
+
+    // The background sync runs on its own beat, so this keeps the line honest
+    // without the page having to be reopened.
+    const timer = window.setInterval(() => setSyncedAt(lastSyncedAt()), 5000);
+    return () => window.clearInterval(timer);
   }, []);
 
   const refresh = useCallback(async (number: string) => {
@@ -135,6 +161,7 @@ export default function AccountPanel() {
         `Sent ${outcome.sent}, received ${outcome.received}.` +
           (outcome.changed ? " Reloading to show the new state." : "")
       );
+      setSyncedAt(lastSyncedAt());
       if (account) await refresh(account);
       if (outcome.changed) window.setTimeout(() => window.location.reload(), 900);
     } catch (caught) {
@@ -291,6 +318,10 @@ export default function AccountPanel() {
           <p className={EYEBROW}>Signed in</p>
           <p className="mt-1.5 font-mono text-xl font-black tracking-wider text-slate-900 dark:text-white">
             {formatAccountNumber(account)}
+          </p>
+
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+            {syncedAt ? `Last synced ${sinceLabel(syncedAt)}` : "Not synced yet"}
           </p>
 
           {info && (

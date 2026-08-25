@@ -59,18 +59,34 @@ function readItems(body: Record<string, unknown>): Incoming[] {
 
 // Everything changed since the caller last looked, tombstones included: a
 // delete has to travel as surely as an edit.
+//
+// The cursor counts pushes, not milliseconds. Stamping rows with the device's
+// clock and then asking "what is newer than my cursor" loses every record
+// written by a device whose clock runs behind: the server takes the row and no
+// other device ever sees it.
 export async function pull(request: Request, url: URL, env: Env) {
   const account = await requireAccount(request, env);
-  const since = Number(url.searchParams.get("since") ?? 0);
+  const asked = Number(url.searchParams.get("since") ?? 0);
+  const since = Number.isFinite(asked) ? asked : 0;
 
   const { results } = await env.DB.prepare(
-    "SELECT bucket, id, payload, updated_at FROM items WHERE account = ? AND updated_at > ? ORDER BY updated_at LIMIT 2000"
+    "SELECT bucket, id, payload, updated_at, seq FROM items WHERE account = ? AND seq > ? ORDER BY seq LIMIT 2000"
   )
-    .bind(account, Number.isFinite(since) ? since : 0)
-    .all<{ bucket: string; id: string; payload: string | null; updated_at: number }>();
+    .bind(account, since)
+    .all<{
+      bucket: string;
+      id: string;
+      payload: string | null;
+      updated_at: number;
+      seq: number;
+    }>();
+
+  // The highest counter actually handed over, so a row written during this
+  // query is picked up next time instead of being stepped over.
+  const cursor = results.reduce((highest, row) => Math.max(highest, row.seq), since);
 
   return json({
-    now: Date.now(),
+    now: cursor,
     items: results.map((row) => ({
       bucket: row.bucket,
       id: row.id,
@@ -87,17 +103,28 @@ export async function pull(request: Request, url: URL, env: Env) {
 export async function push(request: Request, env: Env) {
   const account = await requireAccount(request, env);
   const items = readItems(await readJson(request, MAX_PAYLOAD * 4));
-  if (items.length === 0) return json({ written: 0, now: Date.now() });
+  if (items.length === 0) return json({ written: 0, now: 0 });
+
+  // One step of the account's counter per push, taken before the rows are
+  // written so every row in this push carries the same one.
+  const bumped = await env.DB.prepare(
+    "UPDATE accounts SET seq = seq + 1 WHERE id = ? RETURNING seq"
+  )
+    .bind(account)
+    .first<{ seq: number }>();
+
+  const seq = bumped?.seq ?? 0;
 
   const statements = items.map((item) =>
     env.DB.prepare(
-      `INSERT INTO items (account, bucket, id, payload, updated_at)
-       VALUES (?, ?, ?, ?, ?)
+      `INSERT INTO items (account, bucket, id, payload, updated_at, seq)
+       VALUES (?, ?, ?, ?, ?, ?)
        ON CONFLICT (account, bucket, id) DO UPDATE SET
          payload = excluded.payload,
-         updated_at = excluded.updated_at
+         updated_at = excluded.updated_at,
+         seq = excluded.seq
        WHERE excluded.updated_at > items.updated_at`
-    ).bind(account, item.bucket, item.id, item.payload, item.updatedAt)
+    ).bind(account, item.bucket, item.id, item.payload, item.updatedAt, seq)
   );
 
   // A version per save, for notes that still exist. A delete is not a version:
@@ -121,7 +148,7 @@ export async function push(request: Request, env: Env) {
     }
   }
 
-  return json({ written, now: Date.now() });
+  return json({ written, now: seq });
 }
 
 // Every version for a day, then hourly for a week, daily for a month, and one

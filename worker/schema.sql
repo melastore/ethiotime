@@ -68,7 +68,10 @@ CREATE INDEX IF NOT EXISTS words_added ON words (added_at);
 CREATE TABLE IF NOT EXISTS accounts (
   id         TEXT PRIMARY KEY,
   created_at INTEGER NOT NULL,
-  last_seen  INTEGER NOT NULL
+  last_seen  INTEGER NOT NULL,
+  -- Counts up once per push. It is what "everything since I last looked" means,
+  -- because no clock on any device is involved in it.
+  seq        INTEGER NOT NULL DEFAULT 0
 );
 
 -- Everything an account syncs, whatever tool it came from. The app's own shapes
@@ -79,11 +82,16 @@ CREATE TABLE IF NOT EXISTS items (
   bucket     TEXT NOT NULL,
   id         TEXT NOT NULL,
   payload    TEXT,
+  -- The device's clock, which decides who wins when two devices changed the
+  -- same record.
   updated_at INTEGER NOT NULL,
+  -- The account's counter, which decides what a device has not seen yet. Two
+  -- stamps because the devices disagree about the time and the server does not.
+  seq        INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (account, bucket, id)
 );
 
-CREATE INDEX IF NOT EXISTS items_since ON items (account, updated_at);
+CREATE INDEX IF NOT EXISTS items_seq ON items (account, seq);
 
 -- Past versions of a note. Thinned by age on write rather than swept on a
 -- timer, so the cost is paid by whoever is making the versions.

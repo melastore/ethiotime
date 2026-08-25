@@ -22,6 +22,12 @@ const isShadow = (value: unknown): value is Shadow =>
 
 const isNumber = (value: unknown): value is number => typeof value === "number";
 
+// Written on every successful sync so the account page can say when, rather
+// than leaving people guessing whether it is working at all.
+export const SYNCED_AT_KEY = "ethiotime-sync-at";
+
+export const lastSyncedAt = () => readJson<number>(SYNCED_AT_KEY, 0, isNumber);
+
 export type SyncOutcome = {
   sent: number;
   received: number;
@@ -58,6 +64,7 @@ export async function runSync(): Promise<SyncOutcome | null> {
 
   writeJson(SHADOW_KEY, toShadow(merged));
   writeJson(CURSOR_KEY, now);
+  writeJson(SYNCED_AT_KEY, Date.now());
 
   return { sent: sending.length, received: items.length, changed };
 }

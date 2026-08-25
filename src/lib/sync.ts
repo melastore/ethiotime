@@ -56,8 +56,11 @@ export const DOCUMENTS = [
 
 const DOCUMENT_BUCKET = "settings";
 
-export const SHADOW_KEY = "ethiotime-sync-shadow";
-export const CURSOR_KEY = "ethiotime-sync-cursor";
+// Version in the name. The cursor used to be a millisecond stamp and is now a
+// counter, so an old value would be read as a counter far in the future and
+// nothing would ever be pulled again. A new name starts everyone from zero.
+export const SHADOW_KEY = "ethiotime-sync-shadow-2";
+export const CURSOR_KEY = "ethiotime-sync-cursor-2";
 
 export type Shadow = Record<string, SyncRow>;
 

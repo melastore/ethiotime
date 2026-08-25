@@ -5,10 +5,10 @@ import { useEffect } from "react";
 import { loadAccount } from "@/lib/account";
 import { runSync } from "@/lib/sync-client";
 
-// How long after the last change to send it. Typing writes to localStorage on
-// every keystroke, and a row per keystroke would eat the daily write budget for
-// no benefit.
-const SETTLE_MS = 4000;
+// Typing writes to localStorage on every keystroke, and a row per keystroke
+// would eat the daily write budget for no benefit, so changes are gathered up
+// and sent on this beat instead.
+const BEAT_MS = 20_000;
 
 // Syncs in the background while the app is open. A pull that changes what is on
 // the device reloads the page, because every tool reads its storage when it
@@ -39,17 +39,26 @@ export function SyncProvider() {
     // read whatever it writes.
     void sync(false);
 
-    timer = window.setInterval(() => void sync(true), SETTLE_MS * 15);
+    timer = window.setInterval(() => void sync(true), BEAT_MS);
 
-    // Leaving the tab is the moment a change is most likely to be lost.
-    const onHide = () => {
-      if (document.visibilityState === "hidden") void runSync().catch(() => {});
+    // Coming back to the tab is when the other device's work is most likely to
+    // be waiting, and leaving it is when this device's is most likely to be
+    // lost. The hidden case sends without reloading a page nobody is looking at.
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") {
+        void runSync().catch(() => {});
+      } else {
+        void sync(true);
+      }
     };
-    document.addEventListener("visibilitychange", onHide);
+
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("focus", onVisibility);
 
     return () => {
       window.clearInterval(timer);
-      document.removeEventListener("visibilitychange", onHide);
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("focus", onVisibility);
     };
   }, []);
 
