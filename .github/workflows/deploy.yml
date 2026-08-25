@@ -22,6 +22,9 @@ jobs:
     env:
       NEXT_PUBLIC_BASE_PATH: /ethiotime
       NEXT_PUBLIC_SITE_URL: https://melastore.github.io/ethiotime
+      # Without this the build hides note sharing, Telegram reminders and
+      # dictionary sync: hasApi() is false when it is unset.
+      NEXT_PUBLIC_API_URL: https://ethiotime-api.kalebwalelgne.workers.dev
     steps:
       - uses: actions/checkout@v4
 
