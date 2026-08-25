@@ -205,7 +205,7 @@ export default function AgeCalculator() {
         onCommit={(day) => setGregorian({ day })}
         columns={6}
         width="17rem"
-        className="w-[6.5rem] shrink-0"
+        className="order-2 w-full"
       />
       <PickerField
         label={isAmharic ? "ወር" : "Month"}
@@ -218,7 +218,7 @@ export default function AgeCalculator() {
         onCommit={(month) => setGregorian({ month })}
         columns={2}
         width="20rem"
-        className="min-w-0 flex-1"
+        className="order-1 col-span-2 w-full"
       />
       <PickerField
         label={isAmharic ? "ዓመት" : "Year"}
@@ -231,7 +231,7 @@ export default function AgeCalculator() {
         onCommit={(year) => setGregorian({ year })}
         columns={1}
         width="9rem"
-        className="w-[7.5rem] shrink-0"
+        className="order-3 w-full"
       />
     </>
   ) : (
@@ -244,7 +244,7 @@ export default function AgeCalculator() {
         onCommit={(day) => setEthiopian({ day })}
         columns={6}
         width="17rem"
-        className="w-[6.5rem] shrink-0"
+        className="order-2 w-full"
       />
       <PickerField
         label={isAmharic ? "ወር" : "Month"}
@@ -262,7 +262,7 @@ export default function AgeCalculator() {
         onCommit={(month) => setEthiopian({ month })}
         columns={1}
         width="20rem"
-        className="min-w-0 flex-1"
+        className="order-1 col-span-2 w-full"
       />
       <PickerField
         label={isAmharic ? "ዓመት" : "Year"}
@@ -275,7 +275,7 @@ export default function AgeCalculator() {
         onCommit={(year) => setEthiopian({ year })}
         columns={1}
         width="9rem"
-        className="w-[7.5rem] shrink-0"
+        className="order-3 w-full"
       />
     </>
   );
@@ -335,7 +335,7 @@ export default function AgeCalculator() {
             })}
           </div>
 
-          <div className="mt-5 flex items-end gap-2 sm:gap-3">{fields}</div>
+          <div className="mt-5 grid grid-cols-2 items-end gap-2 sm:gap-3">{fields}</div>
 
           {/* The same day written out the other way, so the entry can be checked. */}
           <div className="mt-5 rounded-2xl border border-dashed border-slate-300 px-4 py-3.5 dark:border-slate-700">

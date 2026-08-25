@@ -123,7 +123,7 @@ export function DualDate({
           onCommit={(day) => setGregorian({ day })}
           columns={6}
           width="17rem"
-          className="w-[6.5rem] shrink-0 lg:order-2 lg:w-full"
+          className="order-2 w-full"
         />
         <PickerField
           label={isAmharic ? "ወር" : "Month"}
@@ -136,7 +136,7 @@ export function DualDate({
           onCommit={(month) => setGregorian({ month })}
           columns={2}
           width="20rem"
-          className="min-w-0 flex-1 lg:order-1 lg:col-span-2 lg:w-full"
+          className="order-1 col-span-2 w-full"
         />
         <PickerField
           label={isAmharic ? "ዓመት" : "Year"}
@@ -149,7 +149,7 @@ export function DualDate({
           onCommit={(year) => setGregorian({ year })}
           columns={1}
           width="9rem"
-          className="w-[7.5rem] shrink-0 lg:order-3 lg:w-full"
+          className="order-3 w-full"
         />
       </>
     ),
@@ -163,7 +163,7 @@ export function DualDate({
           onCommit={(day) => setEthiopian({ day })}
           columns={6}
           width="17rem"
-          className="w-[6.5rem] shrink-0 lg:order-2 lg:w-full"
+          className="order-2 w-full"
         />
         <PickerField
           label={isAmharic ? "ወር" : "Month"}
@@ -181,7 +181,7 @@ export function DualDate({
           onCommit={(month) => setEthiopian({ month })}
           columns={1}
           width="20rem"
-          className="min-w-0 flex-1 lg:order-1 lg:col-span-2 lg:w-full"
+          className="order-1 col-span-2 w-full"
         />
         <PickerField
           label={isAmharic ? "ዓመት" : "Year"}
@@ -194,7 +194,7 @@ export function DualDate({
           onCommit={(year) => setEthiopian({ year })}
           columns={1}
           width="9rem"
-          className="w-[7.5rem] shrink-0 lg:order-3 lg:w-full"
+          className="order-3 w-full"
         />
       </>
     ),
@@ -369,15 +369,16 @@ export function DualDate({
         {/* Input side. */}
         <section
           aria-label={`${isAmharic ? "ከ" : "From"} ${NAME[source]}`}
-          className="flex flex-col justify-center rounded-[1.75rem] border-2 border-slate-200 bg-white p-4 shadow-sm sm:p-5 lg:p-6 dark:border-slate-700 dark:bg-slate-900"
+          className="flex flex-col justify-center rounded-[1.75rem] border-2 border-slate-200 bg-white p-5 shadow-sm sm:p-6 lg:p-7 dark:border-slate-700 dark:bg-slate-900"
         >
           <p className={cn(eyebrow, "text-slate-500 dark:text-slate-400")}>
             {isAmharic ? "ከ" : "From"} · {NAME[source]}
           </p>
 
-          {/* One row narrow; grid wide (month on top, day+year under). A picker
-              eats ~60px of chrome, so three in a row truncated "2026" to "20..". */}
-          <div className="mt-3 flex items-end gap-2 lg:mt-5 lg:grid lg:grid-cols-2 lg:gap-3">
+          {/* Month across the top, day and year under it. A picker eats about
+              60px in padding and chevron alone, so three across a phone leaves
+              the month nothing to print its name in. */}
+          <div className="mt-3 grid grid-cols-2 items-end gap-2 lg:mt-5 lg:gap-3">
             {FIELDS[source]}
           </div>
 

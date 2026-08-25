@@ -981,7 +981,7 @@ export default function EventPlanner() {
               }
             />
 
-            <div className="mt-4 flex items-end gap-2">
+            <div className="mt-4 grid grid-cols-2 items-end gap-2">
               <PickerField
                 label={isAmharic ? "ቀን" : "Day"}
                 value={draft.date.day}
@@ -990,7 +990,7 @@ export default function EventPlanner() {
                 onCommit={(day) => setDate({ day })}
                 columns={6}
                 width="17rem"
-                className="w-[5.5rem] shrink-0"
+                className="order-2 w-full"
               />
               <PickerField
                 label={isAmharic ? "ወር" : "Month"}
@@ -1015,7 +1015,7 @@ export default function EventPlanner() {
                 onCommit={(month) => setDate({ month })}
                 columns={isGregorian ? 2 : 1}
                 width="20rem"
-                className="min-w-0 flex-1"
+                className="order-1 col-span-2 w-full"
               />
               <PickerField
                 label={isAmharic ? "ዓመት" : "Year"}
@@ -1028,7 +1028,7 @@ export default function EventPlanner() {
                 onCommit={(year) => setDate({ year })}
                 columns={1}
                 width="9rem"
-                className="w-[7.75rem] shrink-0"
+                className="order-3 w-full"
               />
             </div>
 
