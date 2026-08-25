@@ -12,6 +12,18 @@ import {
 
 import type { TranslationKey } from "@/lib/i18n";
 
+/** What a tool is for, which is how the sidebar groups them. */
+export type ToolGroup = "calendar" | "workspace" | "writing";
+
+export const TOOL_GROUP_LABELS: Record<ToolGroup, { english: string; amharic: string }> = {
+  calendar: { english: "Calendar", amharic: "የቀን መቁጠሪያ" },
+  workspace: { english: "Workspace", amharic: "የሥራ ቦታ" },
+  writing: { english: "Writing", amharic: "መጻፊያ" },
+};
+
+/** Render order for the groups. */
+export const TOOL_GROUP_ORDER: ToolGroup[] = ["calendar", "workspace", "writing"];
+
 export type ToolDefinition = {
   href: string;
   /** English fallback, used when a translation is missing. */
@@ -22,6 +34,7 @@ export type ToolDefinition = {
   descriptionKey: TranslationKey;
   icon: LucideIcon;
   tone: string;
+  group: ToolGroup;
 };
 
 /**
@@ -38,6 +51,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     descriptionKey: "nav.gregorianToEthiopian",
     icon: CalendarSync,
     tone: "from-teal-500 to-cyan-500",
+    group: "calendar",
   },
   {
     href: "/age-calculator",
@@ -48,6 +62,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     descriptionKey: "nav.liveAgeTimeline",
     icon: UserRound,
     tone: "from-cyan-500 to-sky-500",
+    group: "calendar",
   },
   {
     href: "/ethiopian-calendar",
@@ -58,6 +73,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     descriptionKey: "nav.holidaysAndMonthView",
     icon: CalendarRange,
     tone: "from-orange-500 to-amber-500",
+    group: "calendar",
   },
   {
     href: "/amharic-keyboard",
@@ -68,6 +84,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     descriptionKey: "nav.typeInFidel",
     icon: Keyboard,
     tone: "from-amber-500 to-orange-500",
+    group: "writing",
   },
   {
     href: "/note-taking",
@@ -78,6 +95,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     descriptionKey: "nav.fastPersonalNotes",
     icon: NotebookPen,
     tone: "from-emerald-500 to-teal-500",
+    group: "workspace",
   },
   {
     href: "/focus",
@@ -87,7 +105,8 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     titleKey: "nav.focusTimer",
     descriptionKey: "nav.timedStudyRounds",
     icon: Timer,
-    tone: "from-emerald-500 to-green-500",
+    tone: "from-teal-600 to-emerald-400",
+    group: "workspace",
   },
   {
     href: "/event-planner",
@@ -99,10 +118,11 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     descriptionKey: "nav.planAndReminders",
     icon: ListChecks,
     tone: "from-teal-500 to-emerald-500",
+    group: "workspace",
   },
   {
     href: "/holidays",
-    title: "Beal",
+    title: "Holidays",
     description:
       "Every Ethiopian feast day of the year, in both calendars, with the story behind it.",
     navDescription: "Feast days and stories",
@@ -110,5 +130,6 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     descriptionKey: "nav.historyAndDates",
     icon: PartyPopper,
     tone: "from-amber-500 to-rose-500",
+    group: "calendar",
   },
 ];

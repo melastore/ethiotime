@@ -36,6 +36,9 @@ CREATE INDEX IF NOT EXISTS planner_codes_created ON planner_codes (created_at);
 CREATE TABLE IF NOT EXISTS reminders (
   id        TEXT PRIMARY KEY,
   token     TEXT NOT NULL,
+  -- Which part of the app queued it. A push replaces only its own source, so
+  -- the focus timer cannot wipe the planner's reminders and the other way round.
+  source    TEXT NOT NULL DEFAULT 'planner',
   title     TEXT NOT NULL,
   notes     TEXT NOT NULL DEFAULT '',
   -- Formatted on the device: only it knows whether the user reads Ethiopian or

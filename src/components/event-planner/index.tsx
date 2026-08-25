@@ -45,7 +45,7 @@ import {
   type PlannerEvent,
   type RecurrenceRule,
 } from "@/lib/planner";
-import { buildReminders, deviceToken } from "@/lib/planner-telegram";
+import { buildReminders, deviceToken, formatWhen } from "@/lib/planner-telegram";
 import { readJson, writeJson } from "@/lib/storage";
 import { cn } from "@/lib/utils";
 
@@ -186,7 +186,7 @@ const emptyDraft = (calendar: PlannerCalendar): Draft => ({
   notes: "",
   date: getTodayPlannerDate(calendar),
   recurrence: "none",
-  reminderMinutes: 30,
+  reminderMinutes: 0,
 });
 
 export default function EventPlanner() {
@@ -287,9 +287,7 @@ export default function EventPlanner() {
     if (!mounted || !telegram.linked) return;
 
     const timer = window.setTimeout(() => {
-      const reminders = buildReminders(events, new Date(), (occurrence) =>
-        formatGregorian(occurrence.start)
-      );
+      const reminders = buildReminders(events, new Date(), formatWhen);
 
       pushReminders(deviceToken(), reminders).catch(() => {
         // Offline or rate limited; the next edit tries again.
@@ -1028,7 +1026,7 @@ export default function EventPlanner() {
                 onCommit={(year) => setDate({ year })}
                 columns={1}
                 width="9rem"
-                className="w-[6.5rem] shrink-0"
+                className="w-[7.75rem] shrink-0"
               />
             </div>
 

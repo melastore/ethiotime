@@ -1,42 +1,23 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Kenat from "kenat";
-import { ArrowRight, Clock3 } from "lucide-react";
+import { ArrowRight, Sparkles } from "lucide-react";
 
+import { DayArc } from "@/components/home/day-arc";
+import { YearWheel } from "@/components/home/year-wheel";
 import { useLanguage } from "@/components/providers/language-provider";
 import { ETHIOPIAN_MONTHS, WEEKDAY_HEADERS } from "@/lib/calendar-data";
-
-/** Ethiopian clock runs six hours behind the wall clock: 12:00 EAT is 6:00 locally. */
-const ETHIOPIAN_CLOCK_SHIFT_MS = 6 * 60 * 60 * 1000;
-
-const GREGORIAN_MONTH_NAMES = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
-];
+import { ethiopianTimeAt } from "@/lib/ethiopian-clock";
+import { getUpcomingHolidayOccurrences } from "@/lib/ethiopian-holidays";
+import { skyAt } from "@/lib/sky";
 
 const GREGORIAN_WEEKDAYS = [
-  "Sunday",
-  "Monday",
-  "Tuesday",
-  "Wednesday",
-  "Thursday",
-  "Friday",
-  "Saturday",
+  "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday",
 ];
 
-type TodayParts = {
+type Today = {
   ethDay: number;
   ethMonthLatin: string;
   ethMonthAmharic: string;
@@ -44,20 +25,17 @@ type TodayParts = {
   weekdayLatin: string;
   weekdayAmharic: string;
   gregorian: string;
-  clock: string;
+  nextFeast: { name: string; amharic: string; id: string; days: number } | null;
 };
 
-function describe(now: Date): TodayParts {
+function describe(now: Date): Today {
   const eth = new Kenat(now).getEthiopian();
   const month = ETHIOPIAN_MONTHS[eth.month - 1];
   // WEEKDAY_HEADERS starts on Monday; Date#getDay starts on Sunday.
   const weekday = WEEKDAY_HEADERS[(now.getDay() + 6) % 7];
 
-  const shifted = new Date(now.getTime() - ETHIOPIAN_CLOCK_SHIFT_MS);
-  const hours = shifted.getHours();
-  const displayHour = hours % 12 === 0 ? 12 : hours % 12;
-  const minutes = String(shifted.getMinutes()).padStart(2, "0");
-  const seconds = String(shifted.getSeconds()).padStart(2, "0");
+  const [upcoming] = getUpcomingHolidayOccurrences(now, 1);
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
   return {
     ethDay: eth.day,
@@ -66,82 +44,97 @@ function describe(now: Date): TodayParts {
     ethYear: eth.year,
     weekdayLatin: weekday?.full ?? GREGORIAN_WEEKDAYS[now.getDay()],
     weekdayAmharic: weekday?.amharic ?? "",
-    gregorian: `${GREGORIAN_WEEKDAYS[now.getDay()]}, ${
-      GREGORIAN_MONTH_NAMES[now.getMonth()]
-    } ${now.getDate()}, ${now.getFullYear()}`,
-    clock: `${displayHour}:${minutes}:${seconds}`,
+    gregorian: now.toLocaleDateString(undefined, {
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    }),
+    nextFeast: upcoming
+      ? {
+          name: upcoming.holiday.name,
+          amharic: upcoming.holiday.amharic,
+          id: upcoming.holiday.id,
+          days: Math.round(
+            (upcoming.gregorianDate.getTime() - startOfToday.getTime()) / 86400000
+          ),
+        }
+      : null,
   };
 }
 
 export function TodayHero() {
   const { language, t } = useLanguage();
-  const [today, setToday] = useState<TodayParts | null>(null);
-
-  useEffect(() => {
-    // Rendered only after mount: the server has no idea what "today" is for the
-    // visitor, and a server-rendered date would be wrong the moment it is cached.
-    const tick = () => setToday(describe(new Date()));
-    tick();
-    const timer = window.setInterval(tick, 1000);
-    return () => window.clearInterval(timer);
-  }, []);
-
   const isAmharic = language === "am";
 
-  return (
-    <section className="relative overflow-hidden rounded-[2rem] border border-white/60 bg-gradient-to-br from-teal-600 via-teal-700 to-cyan-800 text-white shadow-[0_30px_80px_-40px_rgba(13,148,136,0.9)] dark:border-white/10">
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-amber-300/25 blur-3xl"
-      />
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute -bottom-28 -left-16 h-72 w-72 rounded-full bg-cyan-300/20 blur-3xl"
-      />
+  /*
+   * The clock lives here rather than in the dial, because the panel is painted
+   * from it too: the card behind the sun is the sky the sun is in. Dragging the
+   * dial hands back a scrub position, and the whole card moves to that hour.
+   */
+  const [now, setNow] = useState<Date | null>(null);
+  const [preview, setPreview] = useState<number | null>(null);
+  const [today, setToday] = useState<Today | null>(null);
 
-      <div className="relative grid gap-8 p-6 sm:p-10 lg:grid-cols-[1.15fr_0.85fr] lg:items-center lg:gap-12">
-        <div>
-          <p className="inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-white/90 ring-1 ring-white/25">
-            {isAmharic ? "ዛሬ" : "Today"}
+  useEffect(() => {
+    // Only after mount: a server-rendered "today" is wrong the moment it is cached.
+    const tick = () => setNow(new Date());
+    tick();
+    setToday(describe(new Date()));
+
+    const clock = window.setInterval(tick, 1000);
+    const date = window.setInterval(() => setToday(describe(new Date())), 60_000);
+    return () => {
+      window.clearInterval(clock);
+      window.clearInterval(date);
+    };
+  }, []);
+
+  const sky = useMemo(() => {
+    const live = now ? ethiopianTimeAt(now).dayFraction : 0.25;
+    return skyAt(preview ?? live);
+  }, [now, preview]);
+
+  return (
+    <div className="grid gap-5 lg:grid-cols-[1.05fr_0.95fr]">
+      {/* The day: the date in words, over the dial that shows the hour. */}
+      <section
+        className="relative overflow-hidden rounded-[2rem] border border-white/20 p-6 text-white shadow-[0_30px_80px_-40px_rgba(15,23,42,0.75)] transition-[background] duration-1000 ease-linear sm:p-8 dark:border-white/10"
+        style={{
+          background: `linear-gradient(160deg, ${sky.inkSoft} 0%, ${sky.ink} 55%, rgb(9, 14, 26) 100%)`,
+        }}
+      >
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full blur-3xl transition-colors duration-1000"
+          style={{ background: sky.bottom, opacity: 0.18 }}
+        />
+
+        <div className="relative">
+          <p className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] ring-1 ring-white/25">
+            {t("home.today", "Today")}
           </p>
 
           {today ? (
             <>
-              <p className="mt-5 text-sm font-semibold uppercase tracking-[0.16em] text-teal-100/90">
+              <p className="mt-4 text-xs font-semibold uppercase tracking-[0.16em] text-white/70">
                 {isAmharic ? today.weekdayAmharic : today.weekdayLatin}
               </p>
-
-              <h1 className="section-title mt-2 text-4xl font-black leading-[1.05] sm:text-6xl">
-                {isAmharic ? (
-                  <>
-                    {today.ethMonthAmharic} {today.ethDay}
-                  </>
-                ) : (
-                  <>
-                    {today.ethMonthLatin} {today.ethDay}
-                  </>
-                )}
+              <h1 className="section-title mt-1 text-4xl font-black leading-[1.05] sm:text-5xl">
+                {isAmharic ? today.ethMonthAmharic : today.ethMonthLatin} {today.ethDay}
               </h1>
-
-              <p className="mt-2 text-xl font-bold text-amber-200 sm:text-2xl">
+              <p className="mt-1 text-lg font-bold text-amber-200">
                 {today.ethYear} {isAmharic ? "ዓ.ም" : "E.C."}
-              </p>
-
-              <div className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-teal-50/90">
-                <span className="rounded-lg bg-white/10 px-2.5 py-1 font-semibold ring-1 ring-white/15">
-                  {isAmharic
-                    ? `${today.ethMonthLatin} ${today.ethDay}, ${today.ethYear}`
-                    : `${today.ethMonthAmharic} ${today.ethDay}፣ ${today.ethYear}`}
+                <span className="ml-2 text-sm font-medium text-white/75">
+                  {today.gregorian}
                 </span>
-                <span className="font-medium">{today.gregorian}</span>
-              </div>
+              </p>
             </>
           ) : (
-            <div className="mt-5 space-y-3" aria-hidden="true">
-              <div className="h-4 w-32 animate-pulse rounded bg-white/25" />
-              <div className="h-12 w-64 animate-pulse rounded bg-white/25" />
-              <div className="h-6 w-40 animate-pulse rounded bg-white/20" />
-              <div className="h-4 w-72 animate-pulse rounded bg-white/15" />
+            <div className="mt-4 space-y-2.5" aria-hidden="true">
+              <div className="h-3 w-24 animate-pulse rounded bg-white/25" />
+              <div className="h-10 w-56 animate-pulse rounded bg-white/25" />
+              <div className="h-4 w-64 animate-pulse rounded bg-white/15" />
             </div>
           )}
 
@@ -150,39 +143,51 @@ export function TodayHero() {
               ? `${today.gregorian}. ${today.ethMonthLatin} ${today.ethDay}, ${today.ethYear} Ethiopian.`
               : ""}
           </p>
-
-          <div className="mt-7 flex flex-wrap gap-3">
-            <Link
-              href="/date-converter"
-              className="inline-flex items-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-bold text-teal-800 shadow-lg transition-transform hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-teal-700"
-            >
-              {t("nav.dateConverter", "Date Converter")}
-              <ArrowRight className="h-4 w-4" aria-hidden="true" />
-            </Link>
-            <Link
-              href="/ethiopian-calendar"
-              className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-5 py-3 text-sm font-bold text-white ring-1 ring-white/30 transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-            >
-              {t("nav.ethiopianCalendar", "Ethiopian Calendar")}
-            </Link>
-          </div>
         </div>
 
-        <div className="rounded-3xl bg-white/10 p-6 ring-1 ring-white/20 backdrop-blur-sm">
-          <p className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.16em] text-teal-100">
-            <Clock3 className="h-4 w-4" aria-hidden="true" />
-            {isAmharic ? "የኢትዮጵያ ሰዓት" : "Ethiopian Time"}
-          </p>
-          <p className="mt-3 font-mono text-4xl font-black tabular-nums tracking-tight sm:text-5xl">
-            {today ? today.clock : "--:--:--"}
-          </p>
-          <p className="mt-3 text-xs leading-relaxed text-teal-50/80">
-            {isAmharic
-              ? "የኢትዮጵያ ሰዓት ከመደበኛው ሰዓት በ6 ሰዓት ይለያል።"
-              : "The Ethiopian day starts at dawn, six hours behind the 24-hour clock."}
-          </p>
+        <DayArc
+          now={now}
+          preview={preview}
+          onPreviewChange={setPreview}
+          className="relative mx-auto mt-4 max-w-[19rem]"
+        />
+
+        <p className="relative mt-1 text-center text-[11px] text-white/60">
+          {t("home.arcHint", "Drag the dial to read any hour in both reckonings.")}
+        </p>
+
+        <div className="relative mt-5 flex flex-wrap gap-2.5">
+          <Link
+            href="/date-converter"
+            className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-slate-900 shadow-lg transition-transform hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+          >
+            {t("nav.dateConverter", "Date Converter")}
+            <ArrowRight className="h-4 w-4" aria-hidden="true" />
+          </Link>
+          {today?.nextFeast && (
+            <Link
+              href={`/holidays?holiday=${today.nextFeast.id}`}
+              className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2.5 text-sm font-bold ring-1 ring-white/30 transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+            >
+              <Sparkles className="h-4 w-4 text-amber-300" aria-hidden="true" />
+              {isAmharic ? today.nextFeast.amharic : today.nextFeast.name}
+              <span className="text-white/70">
+                {today.nextFeast.days === 0
+                  ? isAmharic ? "ዛሬ" : "today"
+                  : `${today.nextFeast.days}${isAmharic ? " ቀን" : "d"}`}
+              </span>
+            </Link>
+          )}
         </div>
-      </div>
-    </section>
+      </section>
+
+      {/* The year: thirteen months, sized by the days in them. */}
+      <section className="glass-surface rounded-[2rem] p-6 sm:p-8">
+        <h2 className="section-title text-lg font-black text-slate-900 dark:text-white">
+          {t("home.yearTitle", "The thirteen months")}
+        </h2>
+        <YearWheel className="mt-3" />
+      </section>
+    </div>
   );
 }

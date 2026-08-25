@@ -4,6 +4,8 @@ import { armScheduler } from "./scheduler.ts";
 
 const CODE_TTL_MS = 15 * 60_000;
 const MAX_REMINDERS = 200;
+// A push replaces one source's reminders and leaves the other's alone.
+const SOURCES = ["planner", "focus"];
 // Anything older than this was missed while the worker was down; sending it now
 // would be noise.
 const LATE_CUTOFF_MS = 60 * 60_000;
@@ -81,6 +83,9 @@ type Incoming = {
 export async function putReminders(request: Request, env: Env) {
   const body = await readJson(request);
   const token = requireString(body, "token", 64);
+  const source = typeof body.source === "string" ? body.source : "planner";
+  if (!SOURCES.includes(source)) throw new HttpError(400, "unknown source");
+
   const incoming = Array.isArray(body.reminders) ? body.reminders : [];
   if (incoming.length > MAX_REMINDERS) throw new HttpError(413, "too many reminders");
 
@@ -114,14 +119,15 @@ export async function putReminders(request: Request, env: Env) {
   const statements = [
     // Reminders already sent are kept so a resync does not fire them twice.
     env.DB.prepare(
-      "DELETE FROM reminders WHERE token = ? AND sent_at IS NULL AND remind_at > ?"
-    ).bind(token, now),
+      "DELETE FROM reminders WHERE token = ? AND source = ? AND sent_at IS NULL AND remind_at > ?"
+    ).bind(token, source, now),
     ...rows.map((item) =>
       env.DB.prepare(
-        "INSERT OR IGNORE INTO reminders (id, token, title, notes, when_text, start_at, remind_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
+        "INSERT OR IGNORE INTO reminders (id, token, source, title, notes, when_text, start_at, remind_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
       ).bind(
         `${token}:${item.key}`,
         token,
+        source,
         item.title,
         item.notes,
         item.when,

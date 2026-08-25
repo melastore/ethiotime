@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
+  CalendarCheck,
   CalendarPlus,
   ChevronLeft,
   ChevronRight,
@@ -34,6 +35,7 @@ import {
 import {
   ETHIOPIAN_MONTHS,
   WEEKDAY_HEADERS,
+  getCurrentEthiopianMonth,
   getCurrentEthiopianYear,
 } from "@/lib/calendar-data";
 import {
@@ -153,6 +155,9 @@ const TRADITION_LABELS: Record<HolidayTradition, string> = {
   muslim: "Muslim",
   cultural: "Cultural",
 };
+
+const EYEBROW =
+  "text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400";
 
 const ONE_DAY = 24 * 60 * 60 * 1000;
 
@@ -274,7 +279,7 @@ function HolidayCard({
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-1.5">
           <Icon
-            className="h-3.5 w-3.5 shrink-0 text-slate-400 dark:text-slate-500"
+            className="h-3.5 w-3.5 shrink-0 text-slate-500 dark:text-slate-400"
             aria-hidden="true"
           />
           <span className="truncate font-semibold text-slate-900 dark:text-white">
@@ -285,7 +290,7 @@ function HolidayCard({
           {item.holiday.amharic}
         </span>
         {/* The Gregorian reading of the same day, one size down. */}
-        <span className="mt-0.5 block truncate text-xs text-slate-400 dark:text-slate-500">
+        <span className="mt-0.5 block truncate text-xs text-slate-500 dark:text-slate-400">
           {weekday.full}, {formatGregorian(item.gregorianDate)}
         </span>
       </span>
@@ -296,7 +301,7 @@ function HolidayCard({
           isToday
             ? "bg-teal-600 text-white"
             : isPast
-              ? "bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500"
+              ? "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"
               : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
         )}
       >
@@ -406,17 +411,38 @@ function HolidayDialog({
   );
 }
 
-export default function Beal() {
+export default function HolidayGuide() {
   const currentYear = getCurrentEthiopianYear();
   const [year, setYear] = useState(currentYear);
   const [query, setQuery] = useState("");
   const [tradition, setTradition] = useState<HolidayTradition | "all">("all");
   const [selected, setSelected] = useState<HolidayOccurrence | null>(null);
+  const [upcomingOnly, setUpcomingOnly] = useState(false);
+  /** Which month the rail marks as the one being lived in. */
+  const [thisMonth, setThisMonth] = useState<number | null>(null);
   // Resolved after mount so the server and the browser cannot disagree about
   // what "today" is and trip a hydration mismatch.
   const [today, setToday] = useState<number | null>(null);
 
-  useEffect(() => setToday(startOfDay(new Date())), []);
+  useEffect(() => {
+    setToday(startOfDay(new Date()));
+    setThisMonth(getCurrentEthiopianMonth());
+  }, []);
+
+  // A `?holiday=` link — the one the command palette hands out — opens straight
+  // onto that feast. Read once after mount, then dropped from the URL so closing
+  // the dialog and reloading does not reopen it.
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get("holiday");
+    if (!requested) return;
+
+    const match = getHolidayOccurrencesForEthiopianYear(currentYear).find(
+      (item) => item.holiday.id === requested
+    );
+    if (match) setSelected(match);
+
+    window.history.replaceState(null, "", window.location.pathname);
+  }, [currentYear]);
 
   // The Ethiopian year is the unit here, so a year of feasts runs Meskerem
   // through Pagume rather than January through December.
@@ -432,13 +458,20 @@ export default function Beal() {
       if (tradition !== "all" && item.holiday.tradition !== tradition) {
         return false;
       }
+      if (
+        upcomingOnly &&
+        today !== null &&
+        startOfDay(item.gregorianDate) < today
+      ) {
+        return false;
+      }
       if (!lowered) return true;
 
       return `${item.holiday.name} ${item.holiday.amharic} ${item.ethiopian.monthLabel} ${item.ethiopian.monthAmharic} ${item.holiday.description} ${item.holiday.history}`
         .toLowerCase()
         .includes(lowered);
     });
-  }, [occurrences, query, tradition]);
+  }, [occurrences, query, tradition, upcomingOnly, today]);
 
   // Grouped by Ethiopian month, so the year reads as an Ethiopian calendar does.
   const groups = useMemo(() => {
@@ -504,6 +537,12 @@ export default function Beal() {
     [occurrences, today]
   );
 
+  /** The two after the next one, so the hero shows a run rather than a date. */
+  const following = useMemo(() => {
+    if (today === null) return [];
+    return getUpcomingHolidayOccurrences(new Date(today), 3).slice(1);
+  }, [today]);
+
   const hero = nextUp ?? occurrences[0] ?? null;
   const heroFestival = festivalOf(hero?.holiday.id ?? "");
   const HeroIcon = heroFestival.icon;
@@ -511,24 +550,25 @@ export default function Beal() {
 
   const exportYear = () =>
     downloadIcsContent(
-      `beal-${year}.ics`,
-      createIcsFileContent(occurrences.map(icsEventOf), `Beal ${year} E.C.`)
+      `ethiopian-holidays-${year}.ics`,
+      createIcsFileContent(occurrences.map(icsEventOf), `Ethiopian Holidays ${year} E.C.`)
     );
 
   return (
     <section className="mx-auto w-full max-w-5xl px-1 py-2">
       <header className="mb-5">
-        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <h1 className="text-4xl font-black tracking-tight text-slate-900 dark:text-white">
-            Beal
+        <p className={EYEBROW}>Ethiopian feasts</p>
+        <div className="mt-1.5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <h1 className="text-4xl font-black tracking-tight text-slate-900 sm:text-5xl dark:text-white">
+            Holidays
           </h1>
           <span className="text-2xl font-semibold text-teal-600 dark:text-teal-400">
             በዓል
           </span>
         </div>
-        <p className="mt-1.5 max-w-2xl text-slate-600 dark:text-slate-400">
-          Every Ethiopian feast day of the year — dated in the Ethiopian
-          calendar, with the Gregorian date underneath and the story behind it.
+        <p className="mt-2 max-w-2xl text-slate-600 dark:text-slate-400">
+          Every feast day of the year, dated in the Ethiopian calendar with the
+          Gregorian date underneath and the story behind it.
         </p>
       </header>
 
@@ -543,7 +583,7 @@ export default function Beal() {
           <FestivalWash icon={HeroIcon} />
 
           <div className="relative flex flex-wrap items-end justify-between gap-4">
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/75">
                 {nextUp ? "Next feast" : `Opens the year ${year}`}
               </p>
@@ -580,19 +620,53 @@ export default function Beal() {
               <button
                 type="button"
                 onClick={() => setSelected(hero)}
-                className="rounded-full bg-white/20 px-4 py-2 text-sm font-semibold backdrop-blur transition-colors hover:bg-white/30"
+                className="rounded-full bg-white/20 px-4 py-2 text-sm font-semibold backdrop-blur transition-colors hover:bg-white/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
               >
                 The story
               </button>
             </div>
           </div>
+
+          {/* And what follows it, so the hero shows a run of feasts rather than
+              a single date with nothing behind it. */}
+          {following.length > 0 && (
+            <div className="relative mt-5 flex flex-wrap gap-2 border-t border-white/20 pt-4">
+              {following.map((item) => {
+                const away = daysUntil(item.gregorianDate);
+
+                return (
+                  <button
+                    key={`${item.holiday.id}-${item.ethiopian.year}`}
+                    type="button"
+                    onClick={() => setSelected(item)}
+                    className="min-w-0 flex-1 rounded-2xl bg-white/12 px-3 py-2 text-left backdrop-blur transition-colors hover:bg-white/22 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                  >
+                    <span className="block truncate text-sm font-semibold">
+                      {item.holiday.name}
+                    </span>
+                    <span className="mt-0.5 block truncate text-[11px] text-white/75">
+                      {item.ethiopian.day} {item.ethiopian.monthAmharic}
+                      {away === null ? "" : ` · ${countdownOf(away)}`}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
-      {/* Year rail: the whole Ethiopian year at a glance, a dot per feast. */}
-      <div className="mt-4 flex gap-1 overflow-x-auto pb-1">
+      {/* The whole Ethiopian year at a glance. Each month carries its own count
+          and a tick per feast, so a heavy month is visible before reading a
+          single name; the month being lived in is ringed. */}
+      <nav
+        aria-label="Jump to a month"
+        className="scrollbar-slim -mx-1 mt-4 flex gap-1.5 overflow-x-auto px-1 pb-1.5"
+      >
         {ETHIOPIAN_MONTHS.map((month, index) => {
           const total = byMonth[index];
+          const isNow = thisMonth === index + 1 && year === currentYear;
+
           return (
             <button
               key={month.value}
@@ -600,31 +674,50 @@ export default function Beal() {
               disabled={total === 0}
               onClick={() =>
                 document
-                  .getElementById(`beal-month-${index + 1}`)
+                  .getElementById(`holiday-month-${index + 1}`)
                   ?.scrollIntoView({ behavior: "smooth", block: "start" })
               }
               className={cn(
-                "flex min-w-[3.9rem] flex-1 flex-col items-center gap-1 rounded-xl border px-1 py-2 transition-colors",
-                total > 0
-                  ? "border-slate-200 bg-white hover:border-teal-500 hover:bg-teal-50 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-teal-600 dark:hover:bg-teal-950/40"
-                  : "cursor-default border-dashed border-slate-200 bg-transparent opacity-50 dark:border-slate-800"
+                "flex min-w-[4.9rem] flex-1 flex-col gap-1.5 rounded-2xl border px-2.5 py-2 text-left transition-[transform,box-shadow,border-color,background-color] duration-200",
+                total === 0
+                  ? "cursor-default border-dashed border-slate-200 bg-transparent opacity-50 dark:border-slate-800"
+                  : "border-slate-200 bg-white hover:-translate-y-0.5 hover:border-teal-500 hover:shadow-md dark:border-slate-800 dark:bg-slate-900 dark:hover:border-teal-600",
+                isNow &&
+                  "border-teal-500 bg-teal-50 dark:border-teal-500 dark:bg-teal-950/50"
               )}
             >
-              <span className="truncate text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                {month.amharic}
+              <span className="flex items-baseline justify-between gap-1">
+                <span className="truncate text-xs font-bold text-slate-800 dark:text-slate-100">
+                  {month.amharic}
+                </span>
+                <span
+                  className={cn(
+                    "shrink-0 text-[10px] font-bold tabular-nums",
+                    total > 0
+                      ? "text-teal-700 dark:text-teal-300"
+                      : "text-slate-500 dark:text-slate-400"
+                  )}
+                >
+                  {total || "—"}
+                </span>
               </span>
-              <span className="flex h-1.5 items-center gap-0.5">
-                {Array.from({ length: total }, (_, dot) => (
+
+              <span className="truncate text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                {month.label}
+              </span>
+
+              <span aria-hidden="true" className="flex h-1 gap-0.5">
+                {Array.from({ length: total }, (_, tick) => (
                   <span
-                    key={dot}
-                    className="h-1.5 w-1.5 rounded-full bg-teal-500"
+                    key={tick}
+                    className="h-1 flex-1 rounded-full bg-teal-500 dark:bg-teal-400"
                   />
                 ))}
               </span>
             </button>
           );
         })}
-      </div>
+      </nav>
 
       <div className="sticky top-[3.25rem] z-20 -mx-1 mt-4 rounded-2xl border border-slate-200/70 bg-white/80 px-3 py-3 backdrop-blur-xl lg:top-2 dark:border-slate-800/70 dark:bg-slate-950/70">
         <div className="flex flex-wrap items-center gap-2">
@@ -641,7 +734,7 @@ export default function Beal() {
               <span className="block text-sm font-bold tabular-nums text-slate-900 dark:text-white">
                 {year}
               </span>
-              <span className="block text-[10px] text-slate-400 dark:text-slate-500">
+              <span className="block text-[10px] text-slate-500 dark:text-slate-400">
                 {gregorianSpanOf(year)}
               </span>
             </span>
@@ -659,7 +752,7 @@ export default function Beal() {
               three controls sit on one row, search in the middle. */}
           <div className="relative order-last w-full sm:order-none sm:w-auto sm:min-w-[10rem] sm:flex-1">
             <Search
-              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500"
               aria-hidden="true"
             />
             <input
@@ -681,7 +774,7 @@ export default function Beal() {
           </button>
         </div>
 
-        <div className="mt-2.5 flex gap-1.5 overflow-x-auto pb-0.5">
+        <div className="scrollbar-slim mt-2.5 flex items-center gap-1.5 overflow-x-auto pb-0.5">
           {TRADITIONS.map((option) => {
             const total = counts.get(option.id) ?? 0;
             const isActive = tradition === option.id;
@@ -705,29 +798,60 @@ export default function Beal() {
               </button>
             );
           })}
+
+          <span
+            aria-hidden="true"
+            className="mx-0.5 h-5 w-px shrink-0 bg-slate-200 dark:bg-slate-700"
+          />
+
+          {/* Most of a year is behind you by spring; this hides it. */}
+          <button
+            type="button"
+            onClick={() => setUpcomingOnly((only) => !only)}
+            aria-pressed={upcomingOnly}
+            className={cn(
+              "inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors",
+              upcomingOnly
+                ? "bg-teal-600 text-white"
+                : "bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+            )}
+          >
+            <CalendarCheck className="h-3.5 w-3.5" aria-hidden="true" />
+            Still to come
+          </button>
         </div>
       </div>
 
-      <p className="mt-4 text-sm text-slate-500 dark:text-slate-400">
-        <span className="font-semibold text-slate-900 dark:text-white">
+      <p className="mt-4 text-sm text-slate-600 dark:text-slate-300">
+        <span className="font-bold text-slate-900 dark:text-white">
           {filtered.length}
         </span>{" "}
-        {filtered.length === 1 ? "feast" : "feasts"} in {year}
-        {remaining !== null && year === currentYear && (
-          <> · {remaining} still to come</>
+        {filtered.length === 1 ? "feast" : "feasts"}
+        {filtered.length !== occurrences.length && (
+          <span className="text-slate-500 dark:text-slate-400">
+            {" "}
+            of {occurrences.length}
+          </span>
+        )}{" "}
+        in {year}
+        {remaining !== null && year === currentYear && !upcomingOnly && (
+          <span className="text-slate-500 dark:text-slate-400">
+            {" "}
+            · {remaining} still to come
+          </span>
         )}
       </p>
 
       {groups.map((group) => (
-        <section key={group.month} id={`beal-month-${group.month}`} className="mt-6 scroll-mt-32">
+        <section key={group.month} id={`holiday-month-${group.month}`} className="mt-6 scroll-mt-32">
           <div className="mb-3 flex items-baseline gap-2.5">
             <h2 className="text-xl font-bold text-slate-900 dark:text-white">
               {group.amharic}
             </h2>
-            <span className="text-sm font-semibold uppercase tracking-[0.1em] text-slate-400 dark:text-slate-500">
+            <span className="text-sm font-semibold uppercase tracking-[0.1em] text-slate-500 dark:text-slate-400">
               {group.label}
             </span>
-            <span className="hidden text-xs text-slate-400 dark:text-slate-600 sm:inline">
+            <span className="hidden text-xs text-slate-500 dark:text-slate-600 sm:inline">
               {group.span}
             </span>
             <span
@@ -750,9 +874,26 @@ export default function Beal() {
       ))}
 
       {filtered.length === 0 && (
-        <p className="mt-4 rounded-2xl border border-dashed border-slate-300 px-5 py-12 text-center text-sm text-slate-500 dark:border-slate-800 dark:text-slate-400">
-          No feast matched {query ? `“${query}”` : "that filter"} in {year}.
-        </p>
+        <div className="mt-4 rounded-3xl border border-dashed border-slate-300 px-5 py-12 text-center dark:border-slate-700">
+          <PartyPopper
+            className="mx-auto h-8 w-8 text-slate-400 dark:text-slate-500"
+            aria-hidden="true"
+          />
+          <p className="mt-3 text-sm font-semibold text-slate-700 dark:text-slate-200">
+            No feast matched {query ? `“${query}”` : "that filter"} in {year}.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              setQuery("");
+              setTradition("all");
+              setUpcomingOnly(false);
+            }}
+            className="mt-3 rounded-full bg-slate-900 px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-slate-700 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200"
+          >
+            Clear filters
+          </button>
+        </div>
       )}
 
       <HolidayDialog

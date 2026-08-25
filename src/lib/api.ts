@@ -86,10 +86,16 @@ export type RemindPayload = {
   remindAt: number;
 };
 
-export const pushReminders = (token: string, reminders: RemindPayload[]) =>
+// `source` scopes the replace: pushing the timer's reminders must not clear the
+// planner's, or the other way round.
+export const pushReminders = (
+  token: string,
+  reminders: RemindPayload[],
+  source: "planner" | "focus" = "planner"
+) =>
   call<{ stored: number }>("/api/planner/reminders", {
     method: "PUT",
-    body: JSON.stringify({ token, reminders }),
+    body: JSON.stringify({ token, reminders, source }),
   });
 
 export const fetchWords = (since: number) =>

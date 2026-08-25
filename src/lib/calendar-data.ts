@@ -77,6 +77,8 @@ const getCurrentGregorianYear = () => new Date().getFullYear();
 
 export const getCurrentEthiopianYear = () => new Kenat().getEthiopian().year;
 
+export const getCurrentEthiopianMonth = () => new Kenat().getEthiopian().month;
+
 export const getCenteredGregorianYears = (
   yearsBefore = 75,
   total = 150
@@ -138,4 +140,20 @@ export const getDaysInMonthForMode = (
   if (monthNumber !== 13) return 30;
   if (Number.isNaN(yearNumber)) return 5;
   return yearNumber % 4 === 3 ? 6 : 5;
+};
+
+/**
+ * The Gregorian date an Ethiopian one falls on.
+ *
+ * Anchored at midday rather than midnight: a clock change of an hour either way
+ * can move a midnight timestamp onto the day before or after, and every caller
+ * here cares about the calendar day rather than the instant.
+ */
+export const gregorianDateOf = (
+  year: number,
+  month: number,
+  day: number
+): Date => {
+  const converted = new Kenat({ year, month, day }).getGregorian();
+  return new Date(converted.year, converted.month - 1, converted.day, 12);
 };

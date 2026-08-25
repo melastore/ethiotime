@@ -4,6 +4,7 @@
 // there.
 
 import type { RemindPayload } from "@/lib/api";
+import { ETHIOPIAN_MONTHS } from "@/lib/calendar-data";
 import { getUpcomingOccurrences, type PlannerEvent, type PlannerOccurrence } from "@/lib/planner";
 import { readText, writeText } from "@/lib/storage";
 
@@ -17,6 +18,24 @@ export function deviceToken(): string {
   const token = crypto.randomUUID();
   writeText(TOKEN_KEY, token);
   return token;
+}
+
+// Both calendars, because the message arrives away from the app and there is
+// nothing else on screen to read the date against.
+export function formatWhen(occurrence: PlannerOccurrence): string {
+  const gregorian = occurrence.start.toLocaleString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  const month = ETHIOPIAN_MONTHS[occurrence.ethiopian.month - 1];
+  if (!month) return gregorian;
+
+  return `${gregorian}\n${month.amharic} ${occurrence.ethiopian.day}, ${occurrence.ethiopian.year} ዓ.ም.`;
 }
 
 export type ReminderWindow = {
