@@ -57,6 +57,10 @@ redirect to, the second is the `t.me` link shown in the planner.
 
 ## Notes on the design
 
+The cron runs every minute, so a reminder lands within about a minute of its
+time. It was five minutes to begin with, which made "At start" reminders arrive
+after the event had already begun.
+
 Occurrences are worked out on the device and pushed here as plain timestamps.
 The Ethiopian calendar maths and the user's timezone both live in the app, and
 duplicating either in the worker would be two implementations to keep in step.
