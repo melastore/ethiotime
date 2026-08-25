@@ -17,7 +17,7 @@
     "dev": "next dev",
     "build": "next build",
     "lint": "eslint",
-    "test": "node --test \"src/**/*.test.ts\""
+    "test": "node --import ./scripts/test-alias.mjs --test \"src/**/*.test.ts\""
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",
