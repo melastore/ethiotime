@@ -410,6 +410,19 @@ const EthiopianCalendar = () => {
             const feast = cell.holidays[0];
             const isWeekend = toGregorianDate(gregorian).getDay() % 6 === 0;
 
+            // Days belonging to the months either side are left blank: Pagume is
+            // five days long, so a faded run of neighbours reads as if the month
+            // had dates it does not.
+            if (!inMonth) {
+              return (
+                <div
+                  key={dateKey(ethiopian)}
+                  aria-hidden="true"
+                  className="bg-slate-50/80 dark:bg-slate-950/40"
+                />
+              );
+            }
+
             return (
               <button
                 type="button"
@@ -421,10 +434,8 @@ const EthiopianCalendar = () => {
                 className={cn(
                   "relative flex min-w-0 flex-col items-center justify-center gap-0.5 px-1 py-1 transition-colors",
                   "focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-teal-500",
-                  inMonth
-                    ? "bg-white hover:bg-teal-50/70 dark:bg-slate-900 dark:hover:bg-slate-800/70"
-                    : "bg-slate-50/80 hover:bg-slate-100 dark:bg-slate-950/40 dark:hover:bg-slate-800/40",
-                  isWeekend && inMonth && "bg-slate-50/60 dark:bg-slate-900/60",
+                  "bg-white hover:bg-teal-50/70 dark:bg-slate-900 dark:hover:bg-slate-800/70",
+                  isWeekend && "bg-slate-50/60 dark:bg-slate-900/60",
                   isToday && "bg-teal-50 dark:bg-teal-950/30"
                 )}
               >
@@ -433,46 +444,27 @@ const EthiopianCalendar = () => {
                     "grid h-8 w-8 place-items-center rounded-full text-base font-bold tabular-nums sm:h-9 sm:w-9 sm:text-lg",
                     isToday
                       ? "bg-gradient-to-br from-teal-500 to-emerald-600 text-white shadow-md shadow-teal-600/30 ring-2 ring-white dark:ring-slate-900"
-                      : !inMonth
-                        ? "text-slate-300 dark:text-slate-700"
-                        : feast
-                          ? "text-rose-600 dark:text-rose-400"
-                          : "text-slate-800 dark:text-slate-200"
+                      : feast
+                        ? "text-rose-600 dark:text-rose-400"
+                        : "text-slate-800 dark:text-slate-200"
                   )}
                 >
                   {ethiopian.day}
                 </span>
 
-                <span
-                  className={cn(
-                    "text-[10px] font-medium tabular-nums",
-                    inMonth
-                      ? "text-slate-500 dark:text-slate-400"
-                      : "text-slate-300 dark:text-slate-700"
-                  )}
-                >
+                <span className="text-[10px] font-medium tabular-nums text-slate-500 dark:text-slate-400">
                   {gregorian.day}
                 </span>
 
                 {/* Name it where there's room, dot where there isn't. */}
                 {feast && (
                   <>
-                    <span
-                      className={cn(
-                        "hidden max-w-full truncate rounded px-1 text-[10px] font-bold leading-tight lg:block",
-                        inMonth
-                          ? "text-rose-600 dark:text-rose-400"
-                          : "text-rose-300 dark:text-rose-900"
-                      )}
-                    >
+                    <span className="hidden max-w-full truncate rounded px-1 text-[10px] font-bold leading-tight text-rose-600 lg:block dark:text-rose-400">
                       {isAmharic ? feast.amharic : feast.name}
                     </span>
                     <span
                       aria-hidden="true"
-                      className={cn(
-                        "h-1.5 w-1.5 rounded-full lg:hidden",
-                        inMonth ? "bg-rose-500" : "bg-rose-300 dark:bg-rose-900"
-                      )}
+                      className="h-1.5 w-1.5 rounded-full bg-rose-500 lg:hidden"
                     />
                   </>
                 )}
