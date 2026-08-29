@@ -154,6 +154,7 @@ const TRADITIONS: { id: HolidayTradition | "all"; label: string }[] = [
   { id: "christian", label: "Christian" },
   { id: "muslim", label: "Muslim" },
   { id: "cultural", label: "Cultural" },
+  { id: "orthodox", label: "Orthodox" },
 ];
 
 const TRADITION_LABELS: Record<HolidayTradition, string> = {
@@ -161,6 +162,7 @@ const TRADITION_LABELS: Record<HolidayTradition, string> = {
   christian: "Christian",
   muslim: "Muslim",
   cultural: "Cultural",
+  orthodox: "Orthodox",
 };
 
 const EYEBROW =

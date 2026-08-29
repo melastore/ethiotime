@@ -9,8 +9,15 @@ export type HolidayCalendarType =
   /** Moves with Fasika, which is worked out rather than looked up. */
   | "easter";
 
-/** Who keeps the day: the state, a church, a mosque, or a community. */
-export type HolidayTradition = "national" | "christian" | "muslim" | "cultural";
+/** Who keeps the day: the state, a church, a mosque, or a community.
+ * `orthodox` is the Bahire Hasab cycle of feasts and fasts, which are kept but
+ * are not public holidays. */
+export type HolidayTradition =
+  | "national"
+  | "christian"
+  | "muslim"
+  | "cultural"
+  | "orthodox";
 
 type HolidayDetails = {
   id: string;
@@ -96,6 +103,141 @@ const islamicFormatter = (() => {
 })();
 
 export const ETHIOPIAN_PUBLIC_HOLIDAYS: EthiopianHoliday[] = [
+  {
+    id: "tsome-nenewe",
+    name: "Tsome Nenewe",
+    amharic: "ጾመ ነነዌ",
+    calendar: "easter",
+    tradition: "orthodox",
+    offsetFromEaster: -69,
+    description: "The three day fast of Nineveh.",
+    history:
+      "Kept for the three days Jonah spent inside the fish and the repentance of Nineveh that followed his preaching. It opens the moveable part of the Ethiopian church year: every other date in the cycle is counted from it.",
+  },
+  {
+    id: "abiy-tsom",
+    name: "Abiy Tsom",
+    amharic: "ዓቢይ ጾም",
+    calendar: "easter",
+    tradition: "orthodox",
+    offsetFromEaster: -55,
+    description: "The start of the great fast of fifty five days.",
+    history:
+      "Hudadi or Abiy Tsom is the longest fast of the year, running from this day until Fasika. No animal products are taken, and the observant eat nothing before three in the afternoon.",
+  },
+  {
+    id: "debre-zeit",
+    name: "Debre Zeit",
+    amharic: "ደብረ ዘይት",
+    calendar: "easter",
+    tradition: "orthodox",
+    offsetFromEaster: -28,
+    description: "Mid point of the great fast, on the Mount of Olives.",
+    history:
+      "The fourth Sunday of Abiy Tsom, when the reading is Christ's teaching on the Mount of Olives about the end of the age. It marks the halfway point of the fast.",
+  },
+  {
+    id: "hosanna",
+    name: "Hosanna",
+    amharic: "ሆሳዕና",
+    calendar: "easter",
+    tradition: "orthodox",
+    offsetFromEaster: -7,
+    description: "Palm Sunday, the entry into Jerusalem.",
+    history:
+      "Worshippers are given rings and crosses woven from palm fronds and wear them through Holy Week. It opens the last and strictest week of the fast.",
+  },
+  {
+    id: "rikbe-kahnat",
+    name: "Rikbe Kahnat",
+    amharic: "ርክበ ካህናት",
+    calendar: "easter",
+    tradition: "orthodox",
+    offsetFromEaster: 24,
+    description: "The meeting of the priests.",
+    history:
+      "Commemorates the Council of Nicaea, where the bishops met and settled the rule for calculating Easter that the Ethiopian church still follows.",
+  },
+  {
+    id: "erget",
+    name: "Erget",
+    amharic: "ዕርገት",
+    calendar: "easter",
+    tradition: "orthodox",
+    offsetFromEaster: 39,
+    description: "The Ascension, forty days after the Resurrection.",
+    history:
+      "Always falls on a Thursday, forty days after Tinsae counting the feast itself.",
+  },
+  {
+    id: "peraklitos",
+    name: "Peraklitos",
+    amharic: "ጰራቅሊጦስ",
+    calendar: "easter",
+    tradition: "orthodox",
+    offsetFromEaster: 49,
+    description: "Pentecost, the coming of the Holy Spirit.",
+    history:
+      "The fiftieth day after Tinsae. The name is the Greek Paraclete, the advocate promised to the apostles.",
+  },
+  {
+    id: "tsome-hawaryat",
+    name: "Tsome Hawaryat",
+    amharic: "ጾመ ሐዋርያት",
+    calendar: "easter",
+    tradition: "orthodox",
+    offsetFromEaster: 50,
+    description: "The apostles' fast begins.",
+    history:
+      "Starts the day after Pentecost and runs until the feast of Peter and Paul in Hamle, kept for the apostles who went out to preach after the Spirit came.",
+  },
+  {
+    id: "tsome-dihnet",
+    name: "Tsome Dihnet",
+    amharic: "ጾመ ድህነት",
+    calendar: "easter",
+    tradition: "orthodox",
+    offsetFromEaster: 52,
+    description: "The fast of salvation resumes on Wednesdays and Fridays.",
+    history:
+      "Marks the return of the ordinary weekly fast after the Easter season. Wednesday for the decision to betray Christ, Friday for the crucifixion.",
+  },
+  {
+    id: "tsome-filseta",
+    name: "Tsome Filseta",
+    amharic: "ጾመ ፍልሰታ",
+    calendar: "ethiopian",
+    tradition: "orthodox",
+    month: 12,
+    day: 1,
+    description: "The sixteen day fast for the Virgin Mary begins.",
+    history:
+      "Kept from Nehase 1 to Nehase 16. It is the most widely observed fast after Abiy Tsom, and many who keep no other fast keep this one.",
+  },
+  {
+    id: "debre-tabor",
+    name: "Debre Tabor",
+    amharic: "ደብረ ታቦር",
+    calendar: "ethiopian",
+    tradition: "orthodox",
+    month: 12,
+    day: 13,
+    description: "The Transfiguration, known in the streets as Buhe.",
+    history:
+      "Boys go house to house singing hoya hoye and are given hambasha bread. Bonfires are lit in the evening, and whips are cracked in memory of the shepherds who were out when Christ was transfigured.",
+  },
+  {
+    id: "filseta",
+    name: "Filseta",
+    amharic: "የእመቤታችን ዕረፍት",
+    calendar: "ethiopian",
+    tradition: "orthodox",
+    month: 12,
+    day: 16,
+    description: "The Assumption of the Virgin Mary.",
+    history:
+      "Closes the sixteen day Filseta fast. Kept with an all night vigil, and one of the largest gatherings of the year at Marian churches.",
+  },
   {
     id: "enkutatash",
     name: "Enkutatash",
@@ -248,7 +390,7 @@ export const ETHIOPIAN_PUBLIC_HOLIDAYS: EthiopianHoliday[] = [
     offsetFromEaster: 0,
     description: "Ethiopian Easter, the end of the fifty-five day fast.",
     history:
-      "Fasika follows the Julian computus of bahire hasab, so it falls with Orthodox Easter rather than the Western one, and the fast is broken after the midnight service.",
+      "Called Tinsae, ትንሳኤ, in church. Fasika follows the Julian computus of bahire hasab, so it falls with Orthodox Easter rather than the Western one, and the fast is broken after the midnight service.",
   },
   {
     id: "nations",
