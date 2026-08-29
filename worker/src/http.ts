@@ -12,11 +12,18 @@ export type Env = {
 // shared note out of someone's browser.
 const LOCALHOST = /^http:\/\/localhost(:\d+)?$/;
 
-// The site is served from GitHub Pages, so every browser call is cross-origin.
+// The old Pages URL still reaches installed service workers and any bookmark that
+// has not followed the redirect yet, so it stays permitted alongside APP_URL.
+const LEGACY_ORIGIN = "https://melastore.github.io";
+
+// The API is on a worker.dev subdomain, so every browser call is cross-origin.
 export function cors(env: Env, request: Request): Record<string, string> {
   const origin = request.headers.get("Origin") ?? "";
   const allowed = new URL(env.APP_URL).origin;
-  const permitted = origin === allowed || LOCALHOST.test(origin) ? origin : allowed;
+  const permitted =
+    origin === allowed || origin === LEGACY_ORIGIN || LOCALHOST.test(origin)
+      ? origin
+      : allowed;
 
   return {
     "Access-Control-Allow-Origin": permitted,

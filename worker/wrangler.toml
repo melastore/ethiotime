@@ -24,8 +24,8 @@ database_id = "bc16af2c-fc4e-4757-bebb-6dce6e0be82f"
 
 
 [vars]
-# The static site on Pages. Short links redirect here and CORS is limited to it.
-APP_URL = "https://melastore.github.io/ethiotime"
+# The static site. Short links redirect here and CORS is limited to it.
+APP_URL = "https://ethiotime.com"
 TELEGRAM_BOT = "ethiotime_reminders_bot"
 
 # Set with `wrangler secret put`:
