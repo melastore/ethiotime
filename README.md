@@ -76,7 +76,7 @@ Both are optional and read at build time:
 Every page is client-side and keeps its data on the device, so the app builds to plain static
 files and needs no server. Pushing to `main` runs the workflow in `.github/workflows/deploy.yml`,
 which type-checks, lints, tests, builds and publishes `out/` to GitHub Pages at
-<https://melastore.github.io/ethiotime>.
+<https://ethiotime.com>. `public/CNAME` holds that domain; Pages reads it on every deploy.
 
 To host it elsewhere, set `NEXT_PUBLIC_SITE_URL` to your own URL, drop `NEXT_PUBLIC_BASE_PATH` if
 the site is at the root, run `npm run build`, and serve `out/`.

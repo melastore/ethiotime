@@ -20,8 +20,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      NEXT_PUBLIC_BASE_PATH: /ethiotime
-      NEXT_PUBLIC_SITE_URL: https://melastore.github.io/ethiotime
+      # Served from the apex domain, so no sub-path prefix. public/CNAME is what
+      # tells Pages which domain to answer on.
+      NEXT_PUBLIC_SITE_URL: https://ethiotime.com
       # Without this the build hides note sharing, Telegram reminders and
       # dictionary sync: hasApi() is false when it is unset.
       NEXT_PUBLIC_API_URL: https://ethiotime-api.kalebwalelgne.workers.dev
