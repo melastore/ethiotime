@@ -1,18 +1,24 @@
 import type { MetadataRoute } from "next";
 
+import { HOLIDAY_ARTICLES } from "@/lib/holiday-articles";
 import { TOOL_DEFINITIONS } from "@/lib/tool-registry";
 
 const siteUrl =
   process.env.NEXT_PUBLIC_SITE_URL?.trim() || "https://ethiotime.com";
 
 // Derived from the registry so a removed tool can never linger in the sitemap.
-const ROUTES = ["/", ...TOOL_DEFINITIONS.map((tool) => tool.href)];
+const ROUTES = [
+  "/",
+  ...TOOL_DEFINITIONS.map((tool) => tool.href),
+  ...HOLIDAY_ARTICLES.map((article) => `/holidays/${article.slug}`),
+];
 
 const HIGH_PRIORITY_ROUTES = new Set([
   "/",
   "/date-converter",
   "/event-planner",
   "/holidays",
+  ...HOLIDAY_ARTICLES.map((article) => `/holidays/${article.slug}`),
 ]);
 
 // Emitted as a file at build time; the app has no server to generate it.

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
   CalendarCheck,
@@ -47,6 +48,7 @@ import {
 } from "@/lib/ethiopian-holidays";
 import { addisWallClock } from "@/lib/addis-time";
 import { createIcsFileContent, downloadIcsContent } from "@/lib/ics";
+import { HOLIDAY_ARTICLES } from "@/lib/holiday-articles";
 import { cn } from "@/lib/utils";
 
 type Festival = {
@@ -141,6 +143,10 @@ const DEFAULT_FESTIVAL: Festival = {
 };
 
 const festivalOf = (id: string) => FESTIVALS[id] ?? DEFAULT_FESTIVAL;
+
+// Only some holidays have a written page behind them.
+const articleSlugFor = (id: string) =>
+  HOLIDAY_ARTICLES.find((article) => article.id === id)?.slug ?? null;
 
 const TRADITIONS: { id: HolidayTradition | "all"; label: string }[] = [
   { id: "all", label: "All" },
@@ -382,6 +388,16 @@ function HolidayDialog({
                 {item.holiday.description}
               </p>
               <p>{item.holiday.history}</p>
+
+              {articleSlugFor(item.holiday.id) && (
+                <Link
+                  href={`/holidays/${articleSlugFor(item.holiday.id)}`}
+                  className="inline-flex items-center gap-1 font-semibold text-teal-700 underline-offset-2 hover:underline dark:text-teal-300"
+                >
+                  Read about {item.holiday.name}
+                  <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                </Link>
+              )}
 
               {item.holiday.calendar === "islamic" && (
                 <p className="rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-500 dark:bg-slate-800/60 dark:text-slate-400">
