@@ -32,7 +32,6 @@ import {
   CardContent,
   CardHeader,
   CardDescription,
-  CardTitle,
 } from "@/components/ui/card";
 import { Copy, Languages, Sparkles, Type } from "lucide-react";
 
@@ -223,7 +222,10 @@ const AmharicKeyboard = () => {
             <Sparkles className="h-3.5 w-3.5" />
             Transliteration Studio
           </div>
-          <CardTitle className="text-2xl sm:text-3xl">Amharic Keyboard</CardTitle>
+          {/* The page heading, so the exported HTML has an h1 a crawler can read. */}
+          <h1 className="text-2xl font-semibold leading-none tracking-tight sm:text-3xl">
+            Amharic Keyboard
+          </h1>
           <CardDescription>
             Type naturally in English and get instant Amharic transliteration.
           </CardDescription>

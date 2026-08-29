@@ -56,6 +56,9 @@ export const translations = {
     "home.yearTitle": "The thirteen months",
     "home.dayTitle": "The day, from dawn",
     "home.today": "Today",
+    "home.heading": "Ethiopian calendar, date converter and Amharic tools",
+    "home.lead":
+      "Convert Ethiopian dates to Gregorian, check today's date in the Ethiopian calendar, type Amharic, look up holidays and work out an age in either calendar. Free, no account, and everything runs in your browser.",
   },
   am: {
     "nav.home": "መነሻ",
@@ -107,6 +110,9 @@ export const translations = {
     "home.yearTitle": "አሥራ ሦስቱ ወራት",
     "home.dayTitle": "ቀኑ፣ ከንጋት ጀምሮ",
     "home.today": "ዛሬ",
+    "home.heading": "የኢትዮጵያ ቀን መቁጠሪያ፣ የቀን መቀየሪያና የአማርኛ መሣሪያዎች",
+    "home.lead":
+      "የኢትዮጵያን ቀን ወደ ፈረንጅ ይቀይሩ፣ የዛሬውን ቀን ይመልከቱ፣ በአማርኛ ይጻፉ፣ በዓላትን ይፈልጉ እና ዕድሜን በሁለቱም አቆጣጠር ያስሉ። ነጻ ነው፣ መለያ አይጠይቅም፣ ሁሉም በአሳሽዎ ውስጥ ይሠራል።",
   },
 } as const;
 

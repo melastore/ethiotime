@@ -13,6 +13,21 @@ export default function HomeLanding() {
 
   return (
     <section className="pb-12 pt-2 sm:pt-4 lg:pt-0">
+      <header className="mb-6 max-w-3xl">
+        <h1 className="section-title text-2xl font-black text-slate-900 sm:text-3xl dark:text-white">
+          {t(
+            "home.heading",
+            "Ethiopian calendar, date converter and Amharic tools"
+          )}
+        </h1>
+        <p className="mt-2 text-sm text-slate-600 sm:text-base dark:text-slate-300">
+          {t(
+            "home.lead",
+            "Convert Ethiopian dates to Gregorian, check today's date in the Ethiopian calendar, type Amharic, look up holidays and work out an age in either calendar. Free, no account, and everything runs in your browser."
+          )}
+        </p>
+      </header>
+
       <div className="animate-rise">
         <TodayHero />
       </div>

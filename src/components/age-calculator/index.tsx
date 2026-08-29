@@ -285,10 +285,12 @@ export default function AgeCalculator() {
   return (
     <div className="w-full pb-4 pt-2">
       <header className="mb-6">
-        <p className={EYEBROW}>{isAmharic ? "ዕድሜ ማስሊያ" : "Age calculator"}</p>
-        <h1 className="mt-1.5 text-3xl font-black tracking-tight text-slate-900 sm:text-4xl dark:text-white">
-          {isAmharic ? "ዕድሜዎን ይወቁ" : "How old, exactly"}
+        <h1 className={EYEBROW}>
+          {isAmharic ? "የኢትዮጵያ ዕድሜ ማስሊያ" : "Ethiopian age calculator"}
         </h1>
+        <p className="mt-1.5 text-3xl font-black tracking-tight text-slate-900 sm:text-4xl dark:text-white">
+          {isAmharic ? "ዕድሜዎን ይወቁ" : "How old, exactly"}
+        </p>
         <p className="mt-2 max-w-xl text-sm text-slate-600 sm:text-base dark:text-slate-400">
           {isAmharic
             ? "የተወለዱበትን ቀን በሁለቱም የቀን አቆጣጠር ያስገቡ — ዕድሜዎ፣ ኮከብዎ እና ቀጣዩ ልደትዎ ወዲያው ይታያል።"

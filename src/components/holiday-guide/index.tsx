@@ -579,7 +579,7 @@ export default function HolidayGuide() {
         <p className={EYEBROW}>Ethiopian feasts</p>
         <div className="mt-1.5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <h1 className="text-4xl font-black tracking-tight text-slate-900 sm:text-5xl dark:text-white">
-            Holidays
+            Ethiopian Holidays
           </h1>
           <span className="text-2xl font-semibold text-teal-600 dark:text-teal-400">
             በዓል

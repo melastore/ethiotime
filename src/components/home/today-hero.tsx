@@ -120,9 +120,11 @@ export function TodayHero() {
               <p className="mt-4 text-xs font-semibold uppercase tracking-[0.16em] text-white/70">
                 {isAmharic ? today.weekdayAmharic : today.weekdayLatin}
               </p>
-              <h1 className="section-title mt-1 text-4xl font-black leading-[1.05] sm:text-5xl">
+              {/* Not an h1: today's date only exists after mount, so the exported
+                  HTML would ship the page with no heading at all. */}
+              <p className="section-title mt-1 text-4xl font-black leading-[1.05] sm:text-5xl">
                 {isAmharic ? today.ethMonthAmharic : today.ethMonthLatin} {today.ethDay}
-              </h1>
+              </p>
               <p className="mt-1 text-lg font-bold text-amber-200">
                 {today.ethYear} {isAmharic ? "ዓ.ም" : "E.C."}
                 <span className="ml-2 text-sm font-medium text-white/75">

@@ -199,11 +199,12 @@ const EthiopianCalendar = () => {
             aria-label={isAmharic ? "ወር ይምረጡ" : "Choose a month"}
             className="group -mx-2 min-w-0 rounded-2xl px-2 py-1 text-left transition-colors hover:bg-white/70 dark:hover:bg-slate-800/60"
           >
-            <p className={EYEBROW}>
+            <h1 className={EYEBROW}>
               {isAmharic ? "የኢትዮጵያ ዘመን አቆጣጠር" : "Ethiopian calendar"}
-            </p>
+            </h1>
 
-            <h1 className="mt-0.5 flex min-w-0 items-baseline gap-2">
+            {/* Not a heading: the month only resolves once the clock is read. */}
+            <div className="mt-0.5 flex min-w-0 items-baseline gap-2">
               {/* Placeholder until the clock is read, or the chip flashes empty. */}
               {cursor ? (
                 <>
@@ -230,7 +231,7 @@ const EthiopianCalendar = () => {
                   picker === "closed" ? "rotate-90" : "-rotate-90"
                 )}
               />
-            </h1>
+            </div>
 
             <p className="mt-0.5 truncate text-[11px] text-slate-500 sm:text-xs dark:text-slate-400">
               {month?.gregorianSpan ? `≈ ${month.gregorianSpan}` : " "}
