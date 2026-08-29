@@ -6,7 +6,9 @@ const siteUrl =
   process.env.NEXT_PUBLIC_SITE_URL?.trim() || "https://ethiotime.com";
 
 export const metadata: Metadata = {
-  title: "Home",
+  // The root layout's "%s | EthioTime" template does not apply to this segment,
+  // so the full title has to be spelled out here.
+  title: { absolute: "EthioTime: Ethiopian Calendar, Date Converter and Amharic Tools" },
   description:
     "Explore Ethiopian date conversion, calendar, typing, age calculation, and note tools in one place.",
 };
