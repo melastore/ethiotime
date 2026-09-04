@@ -86,6 +86,26 @@ const QUICK_CHEAT_SHEET = [
   { title: "Punctuation", detail: ":: = ። (Full stop), , = ፣ (Comma), ; = ፤ (Semicolon)" },
 ];
 
+const STANDALONE_VOWELS = [
+  { char: "አ", latin: "a", name: "Ge'ez" },
+  { char: "ኡ", latin: "u", name: "Ka'eb" },
+  { char: "ኢ", latin: "i", name: "Salis" },
+  { char: "ኣ", latin: "aa", name: "Rabi" },
+  { char: "ኤ", latin: "E", name: "Hamis" },
+  { char: "እ", latin: "e", name: "Sadis" },
+  { char: "ኦ", latin: "o", name: "Sab'i" },
+];
+
+const ETHIOPIC_PUNCTUATION = [
+  { char: "፡", name: "Word Space (Neteb)" },
+  { char: "።", name: "Period (Arat Neteb)" },
+  { char: "፣", name: "Comma (Netela Serez)" },
+  { char: "፤", name: "Semicolon (Dereb Serez)" },
+  { char: "፥", name: "Colon (Hule Neteb)" },
+  { char: "፦", name: "Preface (Yemstiret Neteb)" },
+  { char: "፧", name: "Question (Teyaqe)" },
+];
+
 const AmharicKeyboard = () => {
   const [text, setText] = useState("");
   const [copyState, setCopyState] = useState<CopyState>("idle");
@@ -217,22 +237,81 @@ const AmharicKeyboard = () => {
     [text, cursor]
   );
 
-  const handleKeyDown = useCallback(
-    (event: KeyboardEvent<HTMLTextAreaElement>) => {
-      if (event.key !== "Tab" || suggestions.length === 0) return;
-
-      event.preventDefault();
-      applySuggestion(suggestions[0]);
-    },
-    [applySuggestion, suggestions]
-  );
-
-  // Sync cursor and reset keypress timing when cursor position moves explicitly
-  const syncCursor = useCallback((event: { currentTarget: HTMLTextAreaElement }) => {
+  const handleSettle = useCallback(() => {
+    if (combineTimerRef.current) clearTimeout(combineTimerRef.current);
     lastKeyPressTimeRef.current = 0;
     setIsCombining(false);
-    setCursor(event.currentTarget.selectionStart);
   }, []);
+
+  const handleInsertChar = useCallback(
+    (inserted: string) => {
+      const textarea = textareaRef.current;
+      const start = textarea ? textarea.selectionStart : cursor;
+      const end = textarea ? textarea.selectionEnd : cursor;
+
+      const newText = text.slice(0, start) + inserted + text.slice(end);
+      const newPos = start + inserted.length;
+
+      handleSettle();
+      pendingCursorRef.current = newPos;
+      setCursor(newPos);
+      setText(newText);
+      textarea?.focus();
+    },
+    [text, cursor, handleSettle]
+  );
+
+  const handleKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLTextAreaElement>) => {
+      if (event.key === "Tab" && suggestions.length > 0) {
+        event.preventDefault();
+        applySuggestion(suggestions[0]);
+        return;
+      }
+
+      if (event.key === "Escape") {
+        handleSettle();
+        return;
+      }
+
+      if (event.key === " " || event.key === "Enter") {
+        handleSettle();
+      }
+    },
+    [applySuggestion, suggestions, handleSettle]
+  );
+
+  const handleKeyUp = useCallback(
+    (event: KeyboardEvent<HTMLTextAreaElement>) => {
+      // Only reset timing if user moved the cursor with navigation keys
+      if (
+        event.key.startsWith("Arrow") ||
+        event.key === "Home" ||
+        event.key === "End" ||
+        event.key === "PageUp" ||
+        event.key === "PageDown"
+      ) {
+        handleSettle();
+        setCursor(event.currentTarget.selectionStart);
+      }
+    },
+    [handleSettle]
+  );
+
+  const handleClick = useCallback(
+    (event: React.MouseEvent<HTMLTextAreaElement>) => {
+      handleSettle();
+      setCursor(event.currentTarget.selectionStart);
+    },
+    [handleSettle]
+  );
+
+  const handleSelect = useCallback(
+    (event: React.SyntheticEvent<HTMLTextAreaElement>) => {
+      setCursor(event.currentTarget.selectionStart);
+    },
+    []
+  );
 
   useEffect(() => {
     const position = pendingCursorRef.current;
@@ -249,8 +328,7 @@ const AmharicKeyboard = () => {
       const edit = singleCharInsertion(previousValue, nextValue);
       if (!edit) {
         // Non-character change: deletion, paste, or bulk IME change
-        lastKeyPressTimeRef.current = 0;
-        setIsCombining(false);
+        handleSettle();
         setCursor(event.target.selectionStart);
         setText(nextValue);
         return;
@@ -258,7 +336,7 @@ const AmharicKeyboard = () => {
 
       const now = Date.now();
       const timeSinceLastPress =
-        lastKeyPressTimeRef.current === 0 ? undefined : now - lastKeyPressTimeRef.current;
+        lastKeyPressTimeRef.current > 0 ? now - lastKeyPressTimeRef.current : undefined;
       lastKeyPressTimeRef.current = now;
 
       // Visual combine indicator: show combining feedback for activeTimeoutMs
@@ -266,6 +344,7 @@ const AmharicKeyboard = () => {
       setIsCombining(true);
       combineTimerRef.current = setTimeout(() => {
         setIsCombining(false);
+        lastKeyPressTimeRef.current = 0; // Settled!
       }, activeTimeoutMs);
 
       const { newText, newCursorPos } = amharicTransliterate(
@@ -281,7 +360,7 @@ const AmharicKeyboard = () => {
       setCursor(newCursorPos);
       setText(newText);
     },
-    [text, activeTimeoutMs]
+    [text, activeTimeoutMs, handleSettle]
   );
 
   const handleCopy = async () => {
@@ -543,6 +622,64 @@ const AmharicKeyboard = () => {
             )}
           </div>
 
+          {/* Quick Vowels & Fidel Bar: Click to insert standalone vowels or punctuation */}
+          <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 p-3 shadow-xs dark:border-slate-800 dark:bg-slate-900/60">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300">
+                <Sparkles className="h-3.5 w-3.5 text-teal-500" />
+                <span>Quick Vowels & Fidel</span>
+                <span className="text-[10px] font-normal text-slate-500 dark:text-slate-400">
+                  (Click to insert standalone letter / start new word)
+                </span>
+              </div>
+              {isCombining ? (
+                <button
+                  type="button"
+                  onClick={handleSettle}
+                  className="inline-flex items-center gap-1 rounded-lg bg-amber-500/15 px-2 py-0.5 text-[10px] font-bold text-amber-700 hover:bg-amber-500/25 active:scale-95 dark:text-amber-300"
+                >
+                  Settle letter now ↵
+                </button>
+              ) : (
+                <span className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
+                  ✓ Settled — ready for next word
+                </span>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {/* Standalone Vowels */}
+              {STANDALONE_VOWELS.map((item) => (
+                <button
+                  key={item.char}
+                  type="button"
+                  onClick={() => handleInsertChar(item.char)}
+                  title={`Insert standalone '${item.char}' (${item.latin} - ${item.name})`}
+                  className="group flex h-8.5 min-w-[2.25rem] items-center justify-center rounded-xl border border-slate-200 bg-white px-2 text-sm font-bold text-slate-800 shadow-xs transition-colors hover:border-teal-400 hover:bg-teal-50 hover:text-teal-700 active:scale-95 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:border-teal-500 dark:hover:bg-teal-950/60 dark:hover:text-teal-300"
+                >
+                  <span>{item.char}</span>
+                  <span className="ml-1 text-[9px] font-mono text-slate-400 group-hover:text-teal-600 dark:text-slate-500 dark:group-hover:text-teal-400">
+                    {item.latin}
+                  </span>
+                </button>
+              ))}
+
+              <div className="mx-1 h-5 w-px bg-slate-300 dark:bg-slate-700" />
+
+              {/* Ethiopic Punctuation */}
+              {ETHIOPIC_PUNCTUATION.map((item) => (
+                <button
+                  key={item.char}
+                  type="button"
+                  onClick={() => handleInsertChar(item.char)}
+                  title={`Insert '${item.char}' (${item.name})`}
+                  className="flex h-8.5 min-w-[2rem] items-center justify-center rounded-xl border border-slate-200 bg-white px-2 text-sm font-bold text-slate-800 shadow-xs transition-colors hover:border-teal-400 hover:bg-teal-50 hover:text-teal-700 active:scale-95 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:border-teal-500 dark:hover:bg-teal-950/60 dark:hover:text-teal-300"
+                >
+                  <span>{item.char}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Main Textarea */}
           <div className="relative">
             <Textarea
@@ -551,13 +688,10 @@ const AmharicKeyboard = () => {
               value={text}
               onChange={handleChange}
               onKeyDown={handleKeyDown}
-              onKeyUp={syncCursor}
-              onClick={syncCursor}
-              onSelect={syncCursor}
-              onBlur={() => {
-                lastKeyPressTimeRef.current = 0;
-                setIsCombining(false);
-              }}
+              onKeyUp={handleKeyUp}
+              onClick={handleClick}
+              onSelect={handleSelect}
+              onBlur={handleSettle}
               placeholder="Start typing in English to see Amharic (e.g. selam, ityopya, adis abeba)..."
               aria-label="Amharic text area"
             />

@@ -210,8 +210,12 @@ export const amharicTransliterate = (
 
   // A pause exceeding timeout means the previous character is "settled": it should no longer
   // absorb a following vowel or combine into a digraph.
+  // When timeSinceLastPress is undefined (cursor relocated, settled, or initial),
+  // it must not combine with previous characters.
   const isContinuingWord =
-    timeSinceLastPress === undefined || timeSinceLastPress <= timeoutMs;
+    typeof timeSinceLastPress === "number" &&
+    timeSinceLastPress >= 0 &&
+    timeSinceLastPress <= timeoutMs;
 
   const lastAmharicChar = textBefore.slice(-1);
   const lastPosition = fidelPositions[lastAmharicChar];
@@ -234,7 +238,7 @@ export const amharicTransliterate = (
     const vowelIndex = vowelIndexFor(inputKey) as number;
 
     if (!isContinuingWord) {
-      // Timeout exceeded, treat as a standalone vowel character
+      // Timeout exceeded or character settled: start a new standalone vowel
       return {
         newText: textBefore + standaloneVowelFor(inputKey) + textAfter,
         newCursorPos: cursorStart + 1,
@@ -260,6 +264,32 @@ export const amharicTransliterate = (
       const { baseKey, formIndex } = lastPosition;
       const charFamily = amharicChars[baseKey];
 
+      // If preceding character is in the vowel carrier family ('a'):
+      if (baseKey === "a") {
+        // aa => Rabi form (ኣ)
+        if (formIndex === GEEZ && inputKey.toLowerCase() === "a") {
+          return {
+            newText: textBefore.slice(0, -1) + charFamily[3] + textAfter,
+            newCursorPos: cursorStart,
+          };
+        }
+        // ee, ie, or ae => Hamis form (ኤ)
+        if (
+          (formIndex === SADIS || formIndex === 2 || formIndex === GEEZ) &&
+          inputKey.toLowerCase() === "e"
+        ) {
+          return {
+            newText: textBefore.slice(0, -1) + charFamily[HAMIS] + textAfter,
+            newCursorPos: cursorStart,
+          };
+        }
+        // Other consecutive vowels start a new carrier instead of destroying the previous vowel
+        return {
+          newText: textBefore + standaloneVowelFor(inputKey) + textAfter,
+          newCursorPos: cursorStart + 1,
+        };
+      }
+
       // Bare consonant (Sadis) + vowel => that vowel's form.
       if (formIndex === SADIS) {
         return {
@@ -276,18 +306,10 @@ export const amharicTransliterate = (
         };
       }
 
-      // The preceding character already carries a vowel, so start a new
-      // vowel-carrier rather than overwriting it.
-      if (baseKey !== "a") {
-        return {
-          newText: textBefore + amharicChars["a"][vowelIndex] + textAfter,
-          newCursorPos: cursorStart + 1,
-        };
-      }
-
+      // Preceding consonant already carries a vowel (e.g. ሰ + a => ሰአ):
       return {
-        newText: textBefore.slice(0, -1) + charFamily[vowelIndex] + textAfter,
-        newCursorPos: cursorStart,
+        newText: textBefore + amharicChars["a"][vowelIndex] + textAfter,
+        newCursorPos: cursorStart + 1,
       };
     }
   }

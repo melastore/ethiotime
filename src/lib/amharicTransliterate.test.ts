@@ -113,6 +113,32 @@ test("configurable combine word timeout options work as expected", () => {
   assert.equal(amharicTransliterate("ስ", "e", 1, 1, 600, 500).newText, "ስእ");
 });
 
+test("undefined gap time treats characters as settled and emits standalone vowels", () => {
+  // When cursor is reset or field settled (timeSinceLastPress is undefined),
+  // typing a vowel must start a new standalone character rather than combining
+  assert.equal(amharicTransliterate("ስ", "e", 1, 1, undefined, 200).newText, "ስእ");
+  assert.equal(amharicTransliterate("ም", "a", 1, 1, undefined, 200).newText, "ምአ");
+  assert.equal(amharicTransliterate("ት", "i", 1, 1, undefined, 200).newText, "ትኢ");
+  assert.equal(amharicTransliterate("ክ", "u", 1, 1, undefined, 200).newText, "ክኡ");
+  assert.equal(amharicTransliterate("ብ", "o", 1, 1, undefined, 200).newText, "ብኦ");
+});
+
+test("vowel carriers do not destructively overwrite each other", () => {
+  // Fast aa -> ኣ (Rabi), ee/ie -> ኤ (Hamis)
+  assert.equal(amharicTransliterate("አ", "a", 1, 1, 100, 200).newText, "ኣ");
+  assert.equal(amharicTransliterate("እ", "e", 1, 1, 100, 200).newText, "ኤ");
+  assert.equal(amharicTransliterate("ኢ", "e", 1, 1, 100, 200).newText, "ኤ");
+
+  // Non-digraph vowel sequences append standalone vowels instead of overwriting
+  assert.equal(amharicTransliterate("አ", "u", 1, 1, 100, 200).newText, "አኡ");
+  assert.equal(amharicTransliterate("አ", "i", 1, 1, 100, 200).newText, "አኢ");
+  assert.equal(amharicTransliterate("አ", "o", 1, 1, 100, 200).newText, "አኦ");
+
+  // Past timeout, even aa produces separate vowels (አአ)
+  assert.equal(amharicTransliterate("አ", "a", 1, 1, 250, 200).newText, "አአ");
+  assert.equal(amharicTransliterate("አ", "e", 1, 1, 250, 200).newText, "አእ");
+});
+
 test("backspace removes a selection whole", () => {
   const result = amharicTransliterate("ሰላም", "Backspace", 1, 3);
   assert.equal(result.newText, "ሰ");
