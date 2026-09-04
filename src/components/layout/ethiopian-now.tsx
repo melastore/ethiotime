@@ -38,8 +38,9 @@ export function EthiopianNow({ compact = false, className }: EthiopianNowProps) 
   const ethiopianDateLabel = useMemo(() => {
     if (!mounted) return "";
 
+    const locale = language === "am" ? "am-ET" : undefined;
     try {
-      const formatted = new Intl.DateTimeFormat(undefined, {
+      const formatted = new Intl.DateTimeFormat(locale, {
         calendar: "ethiopic",
         weekday: compact ? undefined : "long",
         year: "numeric",
@@ -52,15 +53,17 @@ export function EthiopianNow({ compact = false, className }: EthiopianNowProps) 
       const monthData = ETHIOPIAN_MONTHS[eth.month - 1];
       const weekday = compact
         ? ""
-        : new Intl.DateTimeFormat(undefined, {
+        : new Intl.DateTimeFormat(locale, {
             weekday: "long",
           }).format(now);
 
+      const monthName =
+        language === "am" ? (monthData?.amharic ?? "") : (monthData?.label ?? "");
       return removeEraLabel(
-        `${weekday ? `${weekday}, ` : ""}${monthData?.label ?? ""} ${eth.day}, ${eth.year}`
+        `${weekday ? `${weekday}, ` : ""}${monthName} ${eth.day}, ${eth.year}`
       );
     }
-  }, [compact, mounted, now]);
+  }, [compact, language, mounted, now]);
 
   const clockOf = useMemo(
     () => (moment: Date) =>

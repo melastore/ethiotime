@@ -131,7 +131,7 @@ export default function EthiopianDateConverter() {
     "grid h-10 w-10 shrink-0 place-items-center rounded-xl text-slate-500 transition-colors hover:bg-white hover:text-slate-900 hover:shadow-sm dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white";
 
   return (
-    <section className="flex w-full animate-rise flex-col px-2 lg:h-[calc(100vh-4.5rem)] lg:px-0">
+    <section className="flex w-full animate-rise flex-col px-2 lg:min-h-[calc(100vh-4.5rem)] lg:px-0">
       <div className="mb-3 flex-none text-center sm:mb-4 lg:mb-6">
         <h1 className="section-title text-2xl font-black text-slate-900 sm:text-3xl lg:text-5xl dark:text-white">
           {isAmharic ? "የቀን መቀየሪያ" : "Ethiopian Date Converter"}
@@ -245,7 +245,7 @@ function readFromUrl(): Date | null {
   try {
     if (from === "ethiopian") {
       if (month < 1 || month > 13) return null;
-      const length = month === 13 ? (year % 4 === 3 ? 6 : 5) : 30;
+      const length = month === 13 ? ((((year % 4) + 4) % 4 === 3) ? 6 : 5) : 30;
       return gregorianDateOf(year, month, Math.min(day, length));
     }
 

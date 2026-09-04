@@ -453,7 +453,7 @@ export function CommandPalette({
   ];
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-start justify-center p-4 pt-[10vh] sm:pt-[14vh]">
+    <div className="fixed inset-0 z-[60] flex items-start justify-center p-3 pt-4 sm:p-4 sm:pt-[14vh]">
       {/* Clicking away closes, but Escape is the accessible route: this layer is
           not focusable and is hidden from assistive technology. */}
       <div
@@ -467,7 +467,7 @@ export function CommandPalette({
         aria-modal="true"
         aria-label={t("palette.open", "Search")}
         className={cn(
-          "relative flex max-h-[70vh] w-full max-w-[38rem] flex-col overflow-hidden rounded-3xl",
+          "relative flex max-h-[85vh] sm:max-h-[70vh] w-full max-w-[38rem] flex-col overflow-hidden rounded-3xl",
           "border border-white/70 bg-white/95 shadow-[0_40px_90px_-30px_rgba(15,23,42,0.55)] backdrop-blur-2xl",
           "dark:border-white/10 dark:bg-slate-900/95",
           "motion-safe:animate-rise"

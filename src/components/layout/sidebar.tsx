@@ -122,7 +122,7 @@ export function Sidebar() {
         </div>
       </aside>
 
-      <div className="sticky top-0 z-30 -mx-4 mb-4 border-b border-white/50 bg-white/70 px-4 py-2 backdrop-blur-xl sm:-mx-6 sm:px-6 lg:hidden dark:border-white/10 dark:bg-slate-900/80">
+      <div className="sticky top-0 z-30 mb-3 w-full border-b border-white/50 bg-white/75 px-4 py-2.5 backdrop-blur-xl sm:px-6 lg:hidden dark:border-white/10 dark:bg-slate-900/85">
         <div className="flex items-center justify-between gap-3">
           <Link href="/" className="flex shrink-0 items-center gap-2">
             <Image

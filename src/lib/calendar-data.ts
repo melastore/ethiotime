@@ -139,7 +139,7 @@ export const getDaysInMonthForMode = (
 
   if (monthNumber !== 13) return 30;
   if (Number.isNaN(yearNumber)) return 5;
-  return yearNumber % 4 === 3 ? 6 : 5;
+  return (((yearNumber % 4) + 4) % 4 === 3) ? 6 : 5;
 };
 
 /**

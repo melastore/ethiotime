@@ -46,11 +46,23 @@ export function PickerField({
 }: PickerFieldProps) {
   const hasHints = options.some((option) => option.hint);
   const [open, setOpen] = useState(false);
+  const [alignRight, setAlignRight] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
+
+    if (wrapRef.current) {
+      const rect = wrapRef.current.getBoundingClientRect();
+      const remValue = parseFloat(width) || 16;
+      const pixelWidth = width.endsWith("rem") ? remValue * 16 : remValue;
+      if (rect.left + pixelWidth > window.innerWidth - 16) {
+        setAlignRight(true);
+      } else {
+        setAlignRight(false);
+      }
+    }
 
     // Open on the current value rather than at the top of a long list.
     listRef.current
@@ -70,7 +82,7 @@ export function PickerField({
       document.removeEventListener("mousedown", onAway);
       document.removeEventListener("keydown", onKey);
     };
-  }, [open]);
+  }, [open, width]);
 
   return (
     <div ref={wrapRef} className={cn("relative min-w-0", className)}>
@@ -110,8 +122,11 @@ export function PickerField({
           ref={listRef}
           role="listbox"
           aria-label={label}
-          style={{ width }}
-          className="month-pop absolute left-0 top-full z-40 mt-1.5 max-h-72 max-w-[calc(100vw-3rem)] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-1.5 shadow-2xl dark:border-slate-700 dark:bg-slate-900"
+          style={{ width, maxWidth: "calc(100vw - 2rem)" }}
+          className={cn(
+            "month-pop absolute top-full z-40 mt-1.5 max-h-72 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-1.5 shadow-2xl dark:border-slate-700 dark:bg-slate-900",
+            alignRight ? "right-0" : "left-0"
+          )}
         >
           <div
             className="grid gap-1"

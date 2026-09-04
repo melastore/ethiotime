@@ -80,12 +80,12 @@ export function DualDate({
 
   /** Pagume runs to five days, or six, so a day can fall off the end of a month. */
   const ethiopianMonthLength =
-    ethiopian.month === 13 ? (ethiopian.year % 4 === 3 ? 6 : 5) : 30;
+    ethiopian.month === 13 ? ((((ethiopian.year % 4) + 4) % 4 === 3) ? 6 : 5) : 30;
 
   const setEthiopian = (patch: { day?: number; month?: number; year?: number }) => {
     const year = patch.year ?? ethiopian.year;
     const month = patch.month ?? ethiopian.month;
-    const length = month === 13 ? (year % 4 === 3 ? 6 : 5) : 30;
+    const length = month === 13 ? ((((year % 4) + 4) % 4 === 3) ? 6 : 5) : 30;
     onChange(gregorianDateOf(year, month, Math.min(patch.day ?? ethiopian.day, length)));
   };
 

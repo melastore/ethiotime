@@ -75,6 +75,7 @@ const multiCharConsonants: { [key: string]: string } = {
   sh: "S",
   ch: "c",
   gn: "N",
+  ny: "N",
   zh: "Z",
   ts: "P",
   // Capital letters for unique mapping
@@ -180,14 +181,16 @@ export function singleCharInsertion(
   };
 }
 
-const MODIFICATION_TIMEOUT = 3000; // ms
+/** Default time window in milliseconds for combining characters (0.2s by default). */
+export const DEFAULT_COMBINE_TIMEOUT_MS = 200;
 
 export const amharicTransliterate = (
   currentText: string,
   inputKey: string,
   cursorStart: number,
   cursorEnd: number,
-  timeSinceLastPress?: number
+  timeSinceLastPress?: number,
+  timeoutMs: number = DEFAULT_COMBINE_TIMEOUT_MS
 ): { newText: string; newCursorPos: number } => {
   const textBefore = currentText.substring(0, cursorStart);
   const textAfter = currentText.substring(cursorEnd);
@@ -205,10 +208,10 @@ export const amharicTransliterate = (
     };
   }
 
-  // A long pause means the previous character is "settled": it should no longer
+  // A pause exceeding timeout means the previous character is "settled": it should no longer
   // absorb a following vowel or combine into a digraph.
   const isContinuingWord =
-    timeSinceLastPress === undefined || timeSinceLastPress <= MODIFICATION_TIMEOUT;
+    timeSinceLastPress === undefined || timeSinceLastPress <= timeoutMs;
 
   const lastAmharicChar = textBefore.slice(-1);
   const lastPosition = fidelPositions[lastAmharicChar];

@@ -310,7 +310,7 @@ function convertGregorian(day: number, month: number, year: number): DateAnswer 
 function convertEthiopian(day: number, month: number, year: number): DateAnswer | null {
   if (month < 1 || month > 13 || day < 1) return null;
   // Twelve months of thirty days, then Pagume's five — six in a leap year.
-  const daysInMonth = month === 13 ? (year % 4 === 3 ? 6 : 5) : 30;
+  const daysInMonth = month === 13 ? ((((year % 4) + 4) % 4 === 3) ? 6 : 5) : 30;
   if (day > daysInMonth) return null;
 
   try {

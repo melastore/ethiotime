@@ -63,7 +63,7 @@ export function MobileDock() {
             role="dialog"
             aria-modal="true"
             aria-label={t("palette.tools", "Tools")}
-            className="animate-rise absolute inset-x-0 bottom-0 rounded-t-3xl border-t border-white/60 bg-white/95 p-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/95"
+            className="animate-rise absolute inset-x-0 bottom-0 max-h-[85vh] overflow-y-auto scrollbar-slim rounded-t-3xl border-t border-white/60 bg-white/95 p-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/95"
           >
             <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-slate-300 dark:bg-slate-600" />
 

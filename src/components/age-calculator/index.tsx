@@ -551,12 +551,20 @@ export default function AgeCalculator() {
                   </p>
                 </div>
 
-                {result.birthday.daysAway > 0 && (
+                {result.birthday.daysAway >= 0 && (
                   <p className="text-right">
                     <span className="block text-3xl font-black tabular-nums text-slate-900 dark:text-white">
                       {result.birthday.turning}
                     </span>
-                    <span className={EYEBROW}>{isAmharic ? "ይሞላል" : "turning"}</span>
+                    <span className={EYEBROW}>
+                      {result.birthday.daysAway === 0
+                        ? isAmharic
+                          ? "ዛሬ ተሞላ"
+                          : "turned today"
+                        : isAmharic
+                          ? "ይሞላል"
+                          : "turning"}
+                    </span>
                   </p>
                 )}
               </section>

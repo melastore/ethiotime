@@ -186,7 +186,7 @@ const EthiopianCalendar = () => {
     today.month === cursor.month;
 
   return (
-    <div className="mx-auto flex h-[calc(100svh-7rem)] w-full max-w-5xl select-none flex-col px-1 lg:h-[calc(100vh-4.5rem)]">
+    <div className="mx-auto flex min-h-[500px] h-[calc(100svh-7rem)] w-full max-w-5xl select-none flex-col px-1 lg:min-h-[560px] lg:h-[calc(100vh-4.5rem)]">
       <header className="relative mb-3 flex flex-none items-end justify-between gap-3">
         {/* The title is the picker trigger. */}
         <div ref={pickerRef} className="relative min-w-0">

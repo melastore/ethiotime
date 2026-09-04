@@ -672,7 +672,7 @@ export default function EventPlanner() {
               <p className="relative text-[11px] font-bold uppercase tracking-[0.2em] text-white/60">
                 {isAmharic ? "ቀጣይ" : "Next up"}
               </p>
-              <p className="relative mt-2 truncate text-3xl font-black tracking-tight sm:text-4xl">
+              <p className="relative mt-2 break-words text-2xl font-black tracking-tight line-clamp-2 sm:text-4xl">
                 {next.event.title}
               </p>
               <p className="relative mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-sm font-semibold text-white/80">
@@ -742,7 +742,7 @@ export default function EventPlanner() {
 
                         <div className="min-w-0 flex-1">
                           <p className="flex flex-wrap items-center gap-2">
-                            <span className="truncate text-base font-black text-slate-900 dark:text-white">
+                            <span className="break-words text-base font-black text-slate-900 dark:text-white">
                               {event.title}
                             </span>
                             <span

@@ -52,6 +52,7 @@ export const DOCUMENTS = [
   "focus-timer-settings",
   "focus-timer-chime",
   "focus-timer-autostart",
+  "ethiotime-amharic-timeout",
 ];
 
 const DOCUMENT_BUCKET = "settings";

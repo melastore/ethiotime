@@ -154,9 +154,21 @@ export function TodayHero() {
           className="relative mx-auto mt-4 max-w-[19rem]"
         />
 
-        <p className="relative mt-1 text-center text-[11px] text-white/60">
-          {t("home.arcHint", "Drag the dial to read any hour in both reckonings.")}
-        </p>
+        <div className="relative mt-1.5 flex flex-col items-center gap-1.5">
+          <p className="text-center text-[11px] text-white/60">
+            {t("home.arcHint", "Drag the dial to read any hour in both reckonings.")}
+          </p>
+          {preview !== null && (
+            <button
+              type="button"
+              onClick={() => setPreview(null)}
+              className="inline-flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1 text-xs font-semibold text-white backdrop-blur hover:bg-white/30 active:scale-95 transition-all shadow-sm"
+            >
+              <span>{isAmharic ? "ወደ አሁኑ ሰዓት ተመለስ" : "Reset to live clock"}</span>
+              <span className="text-[11px] opacity-75">✕</span>
+            </button>
+          )}
+        </div>
 
         <div className="relative mt-5 flex flex-wrap gap-2.5">
           <Link

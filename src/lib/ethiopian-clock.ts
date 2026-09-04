@@ -104,7 +104,7 @@ export function dateAtDayFraction(fraction: number, reference: Date): Date {
 
 /** Twelve months of thirty days, then Pagume's five — six before a leap year. */
 export const pagumeLength = (ethiopianYear: number) =>
-  ethiopianYear % 4 === 3 ? 6 : 5;
+  (((ethiopianYear % 4) + 4) % 4 === 3 ? 6 : 5);
 
 export const daysInEthiopianYear = (ethiopianYear: number) =>
   360 + pagumeLength(ethiopianYear);

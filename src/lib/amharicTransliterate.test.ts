@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  DEFAULT_COMBINE_TIMEOUT_MS,
   amharicTransliterate,
   singleCharInsertion,
 } from "./amharicTransliterate.ts";
@@ -28,6 +29,7 @@ test("digraphs collapse into a single fidel", () => {
   assert.equal(type("sh"), "ሽ");
   assert.equal(type("ch"), "ች");
   assert.equal(type("gn"), "ኝ");
+  assert.equal(type("ny"), "ኝ");
   assert.equal(type("zh"), "ዥ");
   assert.equal(type("ts"), "ጽ");
   assert.equal(type("hh"), "ሕ");
@@ -77,6 +79,38 @@ test("unmapped characters pass through untouched", () => {
 test("a long pause stops the vowel folding into the previous consonant", () => {
   const settled = amharicTransliterate("ስ", "e", 1, 1, 9999);
   assert.equal(settled.newText, "ስእ");
+});
+
+test("combine word timeout defaults to 0.2s (200ms)", () => {
+  assert.equal(DEFAULT_COMBINE_TIMEOUT_MS, 200);
+  // Within default 200ms (e.g. 150ms), combines:
+  const combined = amharicTransliterate("ስ", "e", 1, 1, 150);
+  assert.equal(combined.newText, "ሰ");
+  // Past default 200ms (e.g. 250ms), settles:
+  const settled = amharicTransliterate("ስ", "e", 1, 1, 250);
+  assert.equal(settled.newText, "ስእ");
+});
+
+test("configurable combine word timeout options work as expected", () => {
+  // 0.2s (200ms)
+  assert.equal(amharicTransliterate("ስ", "e", 1, 1, 190, 200).newText, "ሰ");
+  assert.equal(amharicTransliterate("ስ", "e", 1, 1, 210, 200).newText, "ስእ");
+
+  // 0.4s (400ms)
+  assert.equal(amharicTransliterate("ስ", "e", 1, 1, 350, 400).newText, "ሰ");
+  assert.equal(amharicTransliterate("ስ", "e", 1, 1, 450, 400).newText, "ስእ");
+
+  // 0.8s (800ms)
+  assert.equal(amharicTransliterate("ስ", "e", 1, 1, 750, 800).newText, "ሰ");
+  assert.equal(amharicTransliterate("ስ", "e", 1, 1, 850, 800).newText, "ስእ");
+
+  // 2s (2000ms)
+  assert.equal(amharicTransliterate("ስ", "e", 1, 1, 1500, 2000).newText, "ሰ");
+  assert.equal(amharicTransliterate("ስ", "e", 1, 1, 2100, 2000).newText, "ስእ");
+
+  // Custom (e.g. 500ms)
+  assert.equal(amharicTransliterate("ስ", "e", 1, 1, 400, 500).newText, "ሰ");
+  assert.equal(amharicTransliterate("ስ", "e", 1, 1, 600, 500).newText, "ስእ");
 });
 
 test("backspace removes a selection whole", () => {

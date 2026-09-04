@@ -160,12 +160,14 @@ export function DayArc({ now, preview, onPreviewChange, className }: DayArcProps
         }}
         onPointerUp={(event) => {
           draggingRef.current = false;
-          event.currentTarget.releasePointerCapture(event.pointerId);
-          onPreviewChange(null);
+          try {
+            event.currentTarget.releasePointerCapture(event.pointerId);
+          } catch {
+            // Pointer may already be released.
+          }
         }}
         onPointerCancel={() => {
           draggingRef.current = false;
-          onPreviewChange(null);
         }}
         onKeyDown={(event) => {
           if (event.key === "ArrowRight" || event.key === "ArrowUp") {
@@ -179,7 +181,6 @@ export function DayArc({ now, preview, onPreviewChange, className }: DayArcProps
             onPreviewChange(null);
           }
         }}
-        onBlur={() => onPreviewChange(null)}
       >
         <defs>
           <radialGradient id={`${gradientId}-sky`} cx="50%" cy="42%" r="62%">
@@ -349,9 +350,18 @@ export function DayArc({ now, preview, onPreviewChange, className }: DayArcProps
         </p>
         <p className="mt-1.5 text-xs font-semibold text-white/90">{localLabel}</p>
         {preview !== null && (
-          <p className="mt-1 rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-white">
-            {isAmharic ? "ቅድመ እይታ" : "Preview"}
-          </p>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onPreviewChange(null);
+            }}
+            className="pointer-events-auto mt-1 inline-flex items-center gap-1 rounded-full bg-white/20 hover:bg-white/30 active:scale-95 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-white transition-all cursor-pointer backdrop-blur-sm"
+            title={isAmharic ? "ወደ አሁኑ ሰዓት ተመለስ" : "Reset to current live time"}
+          >
+            <span>{isAmharic ? "ቅድመ እይታ" : "Preview"}</span>
+            <span className="text-[11px] leading-none opacity-80">✕</span>
+          </button>
         )}
       </div>
     </div>

@@ -118,6 +118,7 @@ export function YearWheel({ className }: { className?: string }) {
       <svg
         viewBox={`${-MARGIN} ${-MARGIN} ${SIZE + MARGIN * 2} ${SIZE + MARGIN * 2}`}
         className="h-auto w-full"
+        onMouseLeave={() => setActive(null)}
       >
         <title>
           {isAmharic
@@ -256,6 +257,16 @@ export function YearWheel({ className }: { className?: string }) {
               <p className="mt-0.5 text-[10px] text-slate-500 dark:text-slate-400">
                 {month.gregorianSpan}
               </p>
+            )}
+
+            {active !== null && active !== today.month && (
+              <button
+                type="button"
+                onClick={() => setActive(null)}
+                className="mt-1 inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-slate-600 transition-colors hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+              >
+                {isAmharic ? "ወደ ዛሬ ወር" : "Back to current"}
+              </button>
             )}
 
             {monthHolidays.length > 0 && (
