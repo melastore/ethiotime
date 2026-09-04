@@ -11,7 +11,14 @@ import { useLanguage } from "@/components/providers/language-provider";
 import { ETHIOPIAN_MONTHS, WEEKDAY_HEADERS } from "@/lib/calendar-data";
 import { ethiopianTimeAt } from "@/lib/ethiopian-clock";
 import { getUpcomingHolidayOccurrences } from "@/lib/ethiopian-holidays";
+import {
+  getDailySaints,
+  getFastingStatus,
+  type DailySaint,
+  type FastingStatus,
+} from "@/lib/ethiopian-saints";
 import { skyAt } from "@/lib/sky";
+import { cn } from "@/lib/utils";
 
 const GREGORIAN_WEEKDAYS = [
   "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday",
@@ -25,6 +32,8 @@ type Today = {
   weekdayLatin: string;
   weekdayAmharic: string;
   gregorian: string;
+  dailySaint: DailySaint;
+  fasting: FastingStatus;
   nextFeast: { name: string; amharic: string; id: string; days: number } | null;
 };
 
@@ -50,6 +59,8 @@ function describe(now: Date): Today {
       day: "numeric",
       year: "numeric",
     }),
+    dailySaint: getDailySaints(eth.day, eth.month === 13),
+    fasting: getFastingStatus(eth.month, eth.day, now.getDay()),
     nextFeast: upcoming
       ? {
           name: upcoming.holiday.name,
@@ -131,6 +142,29 @@ export function TodayHero() {
                   {today.gregorian}
                 </span>
               </p>
+
+              {/* Commemorating Saint & Fasting Status */}
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <span
+                  title={isAmharic ? today.dailySaint.descriptionAmharic : today.dailySaint.descriptionEnglish}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-amber-400/20 px-3 py-1 text-xs font-bold text-amber-200 ring-1 ring-amber-300/30 backdrop-blur-sm"
+                >
+                  <span aria-hidden="true">⛪</span>
+                  <span>{isAmharic ? today.dailySaint.primaryAmharic : today.dailySaint.primaryEnglish}</span>
+                </span>
+                <span
+                  title={isAmharic ? today.fasting.seasonDescriptionAmharic : today.fasting.seasonDescriptionEnglish}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold ring-1 backdrop-blur-sm",
+                    today.fasting.isFasting
+                      ? "bg-violet-500/25 text-violet-200 ring-violet-400/30"
+                      : "bg-emerald-500/20 text-emerald-200 ring-emerald-400/30"
+                  )}
+                >
+                  <span aria-hidden="true">{today.fasting.isFasting ? "🌿" : "✨"}</span>
+                  <span>{isAmharic ? today.fasting.nameAmharic : today.fasting.nameEnglish}</span>
+                </span>
+              </div>
             </>
           ) : (
             <div className="mt-4 space-y-2.5" aria-hidden="true">

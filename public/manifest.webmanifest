@@ -20,5 +20,27 @@
       "type": "image/svg+xml",
       "purpose": "any"
     }
+  ],
+  "shortcuts": [
+    {
+      "name": "Date Converter",
+      "url": "./date-converter",
+      "description": "Convert between Ethiopian and Gregorian dates"
+    },
+    {
+      "name": "Amharic Keyboard",
+      "url": "./amharic-keyboard",
+      "description": "Type in Ge'ez fidel script"
+    },
+    {
+      "name": "Ge'ez Numbers",
+      "url": "./geez-numbers",
+      "description": "Convert to Ge'ez numerals"
+    },
+    {
+      "name": "Business Days",
+      "url": "./business-days",
+      "description": "Ethiopian working days and tax calendar"
+    }
   ]
 }
